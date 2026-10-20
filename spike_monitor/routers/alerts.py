@@ -134,7 +134,7 @@ def site_maintenance(site_id: int, request: Request, hours: float = Form(0), db:
 NUMBER_FIELDS = {"cpu_pct", "temperature_c", "signal_dbm", "broadcast_pps"}
 INT_FIELDS = {"poll_failed_minutes", "warning_delay_minutes", "repeat_minutes"}
 BOOL_FIELDS = {"notify_recovery", "notify_reboot", "desktop_enabled", "whatsapp_enabled"}
-TEXT_FIELDS = {"desktop_min_severity", "wa_phone_number_id", "wa_mode", "wa_template", "wa_language", "wa_api_version"}
+TEXT_FIELDS = {"desktop_min_severity", "wa_provider", "wa_phone_number_id", "wa_mode", "wa_template", "wa_language", "wa_api_version"}
 
 
 def _settings_page(request, db, s: AlertSettings, error=None, status=200):
@@ -166,8 +166,12 @@ async def save(request: Request, db: Session = Depends(get_db), user: User = Dep
                 setattr(s, f.name, str(form.get(f.name, getattr(s, f.name))).strip()[:128])
     except ValueError:
         return _settings_page(request, db, s, "Numbers only in the threshold and timing fields.", 422)
-    if s.wa_mode not in ("template", "text") or s.desktop_min_severity not in Severity.ALL:
+    if (s.wa_mode not in ("template", "text") or s.desktop_min_severity not in Severity.ALL
+            or s.wa_provider not in ("callmebot", "meta")):
         return _settings_page(request, db, s, "Invalid choice.", 422)
+    s.wa_phone_number_id = s.wa_phone_number_id.replace(" ", "")
+    if s.wa_provider == "meta" and (problem := whatsapp.phone_number_id_problem(s.wa_phone_number_id)):
+        return _settings_page(request, db, s, problem, 422)
     token = str(form.get("wa_token", "")).strip()
     if token:
         s.wa_token_enc = request.app.state.secret_box.encrypt(token)
@@ -181,21 +185,29 @@ async def save(request: Request, db: Session = Depends(get_db), user: User = Dep
 
 
 @router.post("/admin/alert-settings/test-whatsapp", dependencies=[Depends(verify_csrf)])
-async def test_whatsapp(request: Request, phone: str = Form(""), db: Session = Depends(get_db),
-                        user: User = Depends(require_admin)):
+async def test_whatsapp(request: Request, phone: str = Form(""), apikey: str = Form(""),
+                        db: Session = Depends(get_db), user: User = Depends(require_admin)):
     s = load_settings(db)
+    box = request.app.state.secret_box
     number = whatsapp.normalize_number(phone or user.phone)
     if not number:
         flash(request, "Enter a phone number to send the test to.", "error")
         return RedirectResponse("/admin/alert-settings", status_code=303)
     text = f"Test message from Spike Net Monitor, sent by {user.username}."
-    payload = whatsapp.build_payload(number, text, s.wa_mode, s.wa_template, s.wa_language)
     try:
-        msg_id = await asyncio.to_thread(whatsapp.send, s.wa_phone_number_id,
-                                         request.app.state.secret_box.decrypt(s.wa_token_enc), payload,
-                                         s.wa_api_version)
+        if s.wa_provider == "callmebot":
+            if not apikey:  # use the key saved for the user with this number
+                owner = next((u for u in db.scalars(select(User))
+                              if whatsapp.normalize_number(u.phone) == number and u.callmebot_key_enc), None)
+                apikey = box.decrypt(owner.callmebot_key_enc) if owner else ""
+            await asyncio.to_thread(whatsapp.send_callmebot, number, apikey.strip(), text)
+            result = "queued"
+        else:
+            payload = whatsapp.build_payload(number, text, s.wa_mode, s.wa_template, s.wa_language)
+            result = await asyncio.to_thread(whatsapp.send, s.wa_phone_number_id, box.decrypt(s.wa_token_enc),
+                                             payload, s.wa_api_version)
         db.add(NotificationLog(channel="whatsapp", recipient=number, message=text))
-        flash(request, f"Test sent to {number} (message id {msg_id}). Check the phone.")
+        flash(request, f"Test sent to +{number} ({result}). Check the phone.")
     except whatsapp.WhatsAppError as exc:
         db.add(NotificationLog(channel="whatsapp", recipient=number, message=text, ok=False, error=str(exc)))
         flash(request, str(exc), "error")

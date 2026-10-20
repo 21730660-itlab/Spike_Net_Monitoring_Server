@@ -30,8 +30,9 @@ class AlertSettings:
     desktop_enabled: bool = True
     desktop_min_severity: str = Severity.WARNING
 
-    # WhatsApp Cloud API (Meta)
+    # WhatsApp: "callmebot" (free, alerts to personal numbers) or "meta" (official WhatsApp Cloud API)
     whatsapp_enabled: bool = False
+    wa_provider: str = "callmebot"
     wa_phone_number_id: str = ""
     wa_token_enc: str = ""  # encrypted access token
     wa_mode: str = "template"  # "template" (works any time) or "text" (only within 24 h of the user writing)

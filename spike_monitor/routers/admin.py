@@ -22,6 +22,8 @@ USER_FIELDS = [
           help="Admin: everything. Technician: manage devices, no passwords or users. Viewer: read only."),
     Field("phone", "WhatsApp number", placeholder="+961 70 123 456", help="International format, with country code."),
     Field("whatsapp_alerts", "Send me WhatsApp alerts", kind="bool", default=False),
+    Field("callmebot_key", "CallMeBot API key", kind="password",
+          help="Only for the CallMeBot WhatsApp option. Leave empty to keep the saved key."),
     Field("alert_min_severity", "Alerts to receive", kind="select", default=Severity.WARNING,
           options=[(Severity.CRITICAL, "Critical only (down, loops)"), (Severity.WARNING, "Critical + warnings"),
                    (Severity.INFO, "Everything (incl. reboots)")]),
@@ -62,6 +64,7 @@ def edit_user(user_id: int, request: Request, db: Session = Depends(get_db), use
     target = db.get(User, user_id) or _404()
     values = {f.name: getattr(target, f.name, "") for f in USER_FIELDS}
     values["password"] = ""
+    values["callmebot_key"] = ""
     values["alert_site_ids"] = [s.id for s in target.alert_sites]
     return _form(request, db, target, values, {})
 
@@ -104,6 +107,8 @@ async def _save(request: Request, db: Session, admin: User, target: User | None)
     target.alert_sites = [s for s in (db.get(Site, i) for i in v["alert_site_ids"]) if s is not None]
     if v["password"]:
         target.password_hash = hash_password(v["password"])
+    if v["callmebot_key"]:
+        target.callmebot_key_enc = request.app.state.secret_box.encrypt(v["callmebot_key"].strip())
     db.flush()
     audit(db, request, admin.username, "user.create" if creating else "user.update",
           f"User #{target.id} {target.username}", f"role={target.role} active={target.is_active}")

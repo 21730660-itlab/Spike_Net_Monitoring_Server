@@ -97,6 +97,7 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(16), default=Role.VIEWER)
     phone: Mapped[str] = mapped_column(String(32), default="")  # WhatsApp number, international format
     whatsapp_alerts: Mapped[bool] = mapped_column(Boolean, default=False)
+    callmebot_key_enc: Mapped[str] = mapped_column(Text, default="")  # encrypted CallMeBot API key
     alert_min_severity: Mapped[str] = mapped_column(String(16), default=Severity.WARNING)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)

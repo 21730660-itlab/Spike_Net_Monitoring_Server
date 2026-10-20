@@ -2,6 +2,7 @@ import asyncio
 import io
 import json
 import urllib.error
+import urllib.parse
 from datetime import timedelta
 
 import pytest
@@ -168,6 +169,7 @@ def test_whatsapp_delivery_filters_and_groups(app, mgr, monkeypatch):
     with SessionLocal() as db:
         s = load_settings(db)
         s.whatsapp_enabled, s.wa_phone_number_id, s.wa_token_enc = True, "PNID", box.encrypt("TOKEN")
+        s.wa_provider = "meta"
         s.desktop_enabled = False
         save_settings(db, s)
         t1 = db.get(Site, ids["t1"])
@@ -258,7 +260,8 @@ def test_alert_pages_ack_feed_and_settings(app, admin, mgr, monkeypatch):
     r = admin.post("/admin/alert-settings", data={
         "csrf_token": admin.token, "cpu_pct": "90", "temperature_c": "65", "signal_dbm": "-72",
         "broadcast_pps": "800", "poll_failed_minutes": "10", "warning_delay_minutes": "3", "repeat_minutes": "30",
-        "notify_recovery": "on", "whatsapp_enabled": "on", "wa_phone_number_id": "PNID", "wa_token": "SECRET-TOKEN",
+        "notify_recovery": "on", "whatsapp_enabled": "on", "wa_provider": "meta",
+        "wa_phone_number_id": "123456789012345", "wa_token": "SECRET-TOKEN",
         "wa_mode": "template", "wa_template": "spike_alert", "wa_language": "en", "wa_api_version": "v21.0",
         "desktop_min_severity": "critical"}, follow_redirects=False)
     assert r.status_code == 303
@@ -315,3 +318,68 @@ def test_schedule_runs_in_background(app, mgr):
         await mgr._task
     asyncio.run(scenario())
     assert ("Core", "down") in open_alerts()
+
+
+def test_meta_phone_number_id_must_not_be_a_phone_number(admin):
+    base = {"csrf_token": admin.token, "whatsapp_enabled": "on", "wa_provider": "meta", "wa_mode": "template",
+            "desktop_min_severity": "warning"}
+    r = admin.post("/admin/alert-settings", data={**base, "wa_phone_number_id": "+96179040395"})
+    assert r.status_code == 422 and "not your phone number" in r.text
+    r = admin.post("/admin/alert-settings", data={**base, "wa_phone_number_id": "123456789012345"},
+                   follow_redirects=False)
+    assert r.status_code == 303
+
+
+def test_callmebot_to_personal_numbers(app, admin, mgr, monkeypatch):
+    ids = tree()
+    box = app.state.secret_box
+    with SessionLocal() as db:
+        s = load_settings(db)
+        s.whatsapp_enabled, s.wa_provider, s.desktop_enabled = True, "callmebot", False
+        save_settings(db, s)
+        db.add_all([User(username="owner", password_hash="x", phone="+961 79 040 395", whatsapp_alerts=True,
+                         callmebot_key_enc=box.encrypt("123456")),
+                    User(username="nokey", password_hash="x", phone="+961 70 000 000", whatsapp_alerts=True)])
+        db.commit()
+    urls = []
+
+    class Resp(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def fake_urlopen(url, timeout):
+        urls.append(url)
+        return Resp(b"<p>Message queued. You will receive it in a few seconds.</p>")
+
+    monkeypatch.setattr(whatsapp.urllib.request, "urlopen", fake_urlopen)
+    set_dev(ids["core"], status=Status.DOWN)
+    asyncio.run(mgr.deliver(mgr.reconcile()))
+    assert len(urls) == 1 and "phone=%2B96179040395" in urls[0] and "apikey=123456" in urls[0]
+    assert "DOWN" in urllib.parse.unquote_plus(urls[0])
+    with SessionLocal() as db:
+        logs = {l.recipient.split()[0]: l for l in db.scalars(select(NotificationLog))}
+        assert logs["owner"].ok and not logs["nokey"].ok and "No CallMeBot API key" in logs["nokey"].error
+
+    # Test button uses the saved key of the user with that number
+    r = admin.post("/admin/alert-settings/test-whatsapp", data={"csrf_token": admin.token, "phone": "+96179040395"})
+    assert "Test sent to +96179040395" in r.text and "apikey=123456" in urls[-1]
+
+    monkeypatch.setattr(whatsapp.urllib.request, "urlopen", lambda url, timeout: Resp(b"APIKey is invalid"))
+    with pytest.raises(whatsapp.WhatsAppError, match="APIKey is invalid"):
+        whatsapp.send_callmebot("+96179040395", "bad", "hi")
+
+
+def test_user_form_saves_callmebot_key_encrypted(app, admin):
+    r = admin.post("/admin/users/new", data={
+        "csrf_token": admin.token, "username": "me", "role": "admin", "password": "Me1234567", "is_active": "on",
+        "whatsapp_alerts": "on", "phone": "+96179040395", "callmebot_key": "987654"}, follow_redirects=False)
+    assert r.status_code == 303
+    with SessionLocal() as db:
+        u = db.scalars(select(User).where(User.username == "me")).one()
+        assert u.callmebot_key_enc and "987654" not in u.callmebot_key_enc
+        assert app.state.secret_box.decrypt(u.callmebot_key_enc) == "987654"
+        uid = u.id
+    assert "987654" not in admin.get(f"/admin/users/{uid}/edit").text

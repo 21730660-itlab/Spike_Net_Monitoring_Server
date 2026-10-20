@@ -1,8 +1,44 @@
 # WhatsApp alerts: setup guide
 
-Spike Net Monitor sends WhatsApp alerts through Meta's official **WhatsApp Cloud API**.
-You need this once, it takes about 30–60 minutes, and Meta's free tier covers normal alert volumes
+There are two ways to get alerts on WhatsApp. Choose one on **Alert settings → WhatsApp → Send through**.
+
+| | CallMeBot | Meta WhatsApp Cloud API |
+|---|---|---|
+| Alerts arrive on | your own mobile number | your own mobile number |
+| Sent from | CallMeBot's number | your business sender number |
+| Setup | 2 minutes per person | 30–60 minutes, once |
+| Needs | nothing | a Meta Business account and a sender number that is **not** on WhatsApp (or Meta's test number) |
+| Reliability | free third-party service, best effort | official, reliable |
+
+> Your personal number can always **receive** alerts. What Meta does not allow is using a number
+> that is already registered on WhatsApp as the **sender** of the Cloud API. That is why the
+> "Phone number ID" field is not your phone number.
+
+## Option A: CallMeBot (easiest, alerts to your own number)
+
+Each person who wants alerts does this once on their phone:
+
+1. Add **+34 644 51 95 23** to the phone's contacts (name it "CallMeBot").
+   The number sometimes changes; check <https://www.callmebot.com/blog/free-api-whatsapp-messages/>.
+2. Send it this WhatsApp message: `I allow callmebot to send me messages`
+3. Wait for the reply with your **API key** (a number like `123456`).
+
+Then in Spike Net Monitor:
+
+1. **Alert settings** → tick **Send WhatsApp alerts** → Send through: **CallMeBot** → **Save settings**.
+2. **Users** → edit the person → WhatsApp number (e.g. `+961 79 040 395`), tick **Send me WhatsApp alerts**,
+   paste the **CallMeBot API key** → Save.
+3. **Alert settings** → **Send WhatsApp test** with that number.
+
+## Option B: Meta WhatsApp Cloud API (official)
+
+Meta's free tier covers normal alert volumes
 (you pay only above Meta's free monthly conversations; check Meta's current pricing).
+
+**Quick test with Meta's free test number:** in step 2 below you can skip adding your own sender:
+the API Setup page gives you a free **test number** and its Phone number ID. Under **To**, add and verify
+up to 5 recipient numbers (for example your own mobile). This is enough to try everything; for daily use,
+add a real sender number.
 
 ## What you need
 

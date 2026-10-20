@@ -261,7 +261,8 @@ class AlertManager:
             users = db.scalars(select(User).options(selectinload(User.alert_sites))
                                .where(User.is_active, User.whatsapp_alerts)).all()
             recipients = [(u.username, whatsapp.normalize_number(u.phone), u.alert_min_severity,
-                           {site.id for site in u.alert_sites}) for u in users if u.phone]
+                           {site.id for site in u.alert_sites}, self.box.decrypt(u.callmebot_key_enc))
+                          for u in users if u.phone]
         logs: list[NotificationLog] = []
 
         if s.desktop_enabled:
@@ -276,16 +277,20 @@ class AlertManager:
 
         if s.whatsapp_enabled and recipients:
             token = self.box.decrypt(s.wa_token_enc)
-            for username, number, min_sev, site_ids in recipients:
+            for username, number, min_sev, site_ids, callmebot_key in recipients:
                 mine = [o for o in outgoing
                         if Severity.RANK.get(o.severity, 0) >= Severity.RANK.get(min_sev, 1)
                         and (not site_ids or o.site_id in site_ids)]
                 if not mine:
                     continue
                 text = mine[0].text if len(mine) == 1 else f"{len(mine)} alerts:\n" + "\n".join(o.text for o in mine)
-                payload = whatsapp.build_payload(number, text, s.wa_mode, s.wa_template, s.wa_language)
                 try:
-                    await asyncio.to_thread(whatsapp.send, s.wa_phone_number_id, token, payload, s.wa_api_version)
+                    if s.wa_provider == "callmebot":
+                        await asyncio.to_thread(whatsapp.send_callmebot, number, callmebot_key, text)
+                    else:
+                        payload = whatsapp.build_payload(number, text, s.wa_mode, s.wa_template, s.wa_language)
+                        await asyncio.to_thread(whatsapp.send, s.wa_phone_number_id, token, payload,
+                                                s.wa_api_version)
                     logs.append(NotificationLog(channel="whatsapp", recipient=f"{username} ({number})", message=text))
                 except whatsapp.WhatsAppError as exc:
                     log.warning("WhatsApp to %s failed: %s", username, exc)

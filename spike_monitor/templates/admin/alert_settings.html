@@ -1,5 +1,11 @@
 {% extends "base.html" %}
 {% block heading %}Alert settings{% endblock %}
+{% block scripts %}<script>
+const prov = document.getElementById("wa_provider");
+const showProvider = () => document.querySelectorAll("[data-provider]").forEach(
+  (el) => { el.style.display = el.dataset.provider === prov.value ? "" : "none"; });
+prov.addEventListener("change", showProvider); showProvider();
+</script>{% endblock %}
 {% block content %}
 {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
 <form method="post" action="/admin/alert-settings">
@@ -37,21 +43,44 @@
     </select></p>
     <p class="help">Every PC or phone that has this app open in a browser also gets a popup and sound for new alerts (click 🔔 at the top to allow notifications).</p>
   </div>
-  <div class="panel"><h2>📱 WhatsApp (Meta Cloud API)</h2>
+  <div class="panel"><h2>📱 WhatsApp</h2>
     <p><label class="check"><input type="checkbox" name="whatsapp_enabled" {{ 'checked' if s.whatsapp_enabled }}> Send WhatsApp alerts</label></p>
-    <div class="form-grid">
-      <div><label>Phone number ID</label><input type="text" name="wa_phone_number_id" value="{{ s.wa_phone_number_id }}" placeholder="e.g. 123456789012345"></div>
-      <div><label>Access token</label><input type="password" name="wa_token" autocomplete="new-password" placeholder="{{ '•••••• saved' if has_token else 'paste the permanent token' }}">
-        {% if has_token %}<label class="check" style="font-weight:400"><input type="checkbox" name="clear_token"> Remove saved token</label>{% endif %}</div>
-      <div><label>Message type</label><select name="wa_mode">
-        <option value="template" {{ 'selected' if s.wa_mode == 'template' }}>Template (recommended, works any time)</option>
-        <option value="text" {{ 'selected' if s.wa_mode == 'text' }}>Plain text (only within 24 h after the person wrote to you)</option></select></div>
-      <div><label>Template name</label><input type="text" name="wa_template" value="{{ s.wa_template }}"></div>
-      <div><label>Template language code</label><input type="text" name="wa_language" value="{{ s.wa_language }}" placeholder="en or ar"></div>
-      <div><label>Graph API version</label><input type="text" name="wa_api_version" value="{{ s.wa_api_version }}"></div>
+    <p><label>Send through</label><select name="wa_provider" id="wa_provider">
+      <option value="callmebot" {{ 'selected' if s.wa_provider == 'callmebot' }}>CallMeBot: free, to your own mobile number (easy)</option>
+      <option value="meta" {{ 'selected' if s.wa_provider == 'meta' }}>Meta WhatsApp Cloud API: official, needs a business sender number</option>
+    </select></p>
+
+    <div data-provider="callmebot">
+      <div class="flash" style="background:var(--bg)">
+        <b>Set up CallMeBot (2 minutes per person):</b>
+        <ol style="margin:6px 0 0;padding-left:20px">
+          <li>On your phone, add <b>+34 644 51 95 23</b> to your contacts (name it CallMeBot). Check
+            <a href="https://www.callmebot.com/blog/free-api-whatsapp-messages/" target="_blank" rel="noopener">callmebot.com</a> in case the number changed.</li>
+          <li>Send it this WhatsApp message: <code>I allow callmebot to send me messages</code></li>
+          <li>You get a reply with your <b>API key</b>.</li>
+          <li>In <a href="/admin/users">Users</a>, edit the person: WhatsApp number, tick <i>Send me WhatsApp alerts</i>, paste the <b>CallMeBot API key</b>.</li>
+        </ol>
+        <p class="help" style="margin-bottom:0">CallMeBot is a free third-party service for personal use; messages come from CallMeBot's number, and it may be slow or limited at busy times.</p>
+      </div>
+    </div>
+
+    <div data-provider="meta">
+      <div class="form-grid">
+        <div><label>Phone number ID</label><input type="text" name="wa_phone_number_id" value="{{ s.wa_phone_number_id }}" placeholder="e.g. 123456789012345">
+          <div class="help">Not your phone number: the long ID shown under the sender number in Meta → WhatsApp → API Setup.</div></div>
+        <div><label>Access token</label><input type="password" name="wa_token" autocomplete="new-password" placeholder="{{ '•••••• saved' if has_token else 'paste the permanent token' }}">
+          {% if has_token %}<label class="check" style="font-weight:400"><input type="checkbox" name="clear_token"> Remove saved token</label>{% endif %}</div>
+        <div><label>Message type</label><select name="wa_mode">
+          <option value="template" {{ 'selected' if s.wa_mode == 'template' }}>Template (recommended, works any time)</option>
+          <option value="text" {{ 'selected' if s.wa_mode == 'text' }}>Plain text (only within 24 h after the person wrote to you)</option></select></div>
+        <div><label>Template name</label><input type="text" name="wa_template" value="{{ s.wa_template }}"></div>
+        <div><label>Template language code</label><input type="text" name="wa_language" value="{{ s.wa_language }}" placeholder="en or ar"></div>
+        <div><label>Graph API version</label><input type="text" name="wa_api_version" value="{{ s.wa_api_version }}"></div>
+      </div>
+      <p class="help">The sender must be a number that is <b>not</b> already on WhatsApp, or Meta's free test number (see docs/WHATSAPP_SETUP.md). Your own mobile can be a <b>recipient</b>.</p>
     </div>
     <p class="help">Recipients: users with "Send me WhatsApp alerts" ticked (Users page).
-      Now: {% for u in recipients %}<b>{{ u.username }}</b> {{ u.phone }}{{ ", " if not loop.last }}{% else %}nobody yet{% endfor %}.</p>
+      Now: {% for u in recipients %}<b>{{ u.username }}</b> {{ u.phone }}{% if s.wa_provider == 'callmebot' and not u.callmebot_key_enc %} <span style="color:var(--down)">(no CallMeBot key)</span>{% endif %}{{ ", " if not loop.last }}{% else %}nobody yet{% endfor %}.</p>
   </div>
 </div>
 <button class="btn primary">Save settings</button>
@@ -61,7 +90,8 @@
   <div class="panel"><h2>Test</h2>
     <form method="post" action="/admin/alert-settings/test-whatsapp" class="actions">
       <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
-      <input type="text" name="phone" placeholder="+961 70 123 456" style="width:auto;min-width:200px" value="{{ user.phone }}">
+      <input type="text" name="phone" placeholder="+961 70 123 456" style="width:auto;min-width:180px" value="{{ user.phone }}">
+      {% if s.wa_provider == 'callmebot' %}<input type="text" name="apikey" placeholder="CallMeBot key (if not saved)" style="width:auto;min-width:180px">{% endif %}
       <button class="btn">Send WhatsApp test</button>
     </form>
     <form method="post" action="/admin/alert-settings/test-desktop" style="margin-top:10px">

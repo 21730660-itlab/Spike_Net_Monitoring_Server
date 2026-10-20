@@ -1,4 +1,9 @@
-"""WhatsApp Cloud API (Meta) sender.
+"""WhatsApp senders: Meta's WhatsApp Cloud API, or CallMeBot for personal numbers.
+
+CallMeBot (free, personal use): every person who wants alerts sends one WhatsApp message to
+CallMeBot once, gets an API key back, and alerts then arrive on their own number from CallMeBot.
+
+Meta WhatsApp Cloud API (official, for businesses):
 
 Business-initiated messages must use an approved *template*. Create one in
 WhatsApp Manager named ``spike_alert`` (category Utility) with the body:
@@ -12,9 +17,11 @@ from __future__ import annotations
 import json
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 
 GRAPH_URL = "https://graph.facebook.com"
+CALLMEBOT_URL = "https://api.callmebot.com/whatsapp.php"
 MAX_PARAM = 1000
 
 
@@ -26,6 +33,45 @@ def normalize_number(phone: str) -> str:
     """'+961 70 123 456' -> '96170123456' (digits only, international format)."""
     digits = re.sub(r"\D", "", phone or "")
     return digits[2:] if digits.startswith("00") else digits
+
+
+def phone_number_id_problem(value: str) -> str | None:
+    """Meta's Phone number ID is a long number shown in API Setup, not the phone number itself."""
+    if not value:
+        return None
+    if value.startswith("+") or not value.isdigit():
+        return ("The Phone number ID is not your phone number: it is a long number (like 123456789012345) "
+                "shown under your number in Meta's WhatsApp → API Setup page.")
+    if len(value) < 12:
+        return "This looks like a phone number. Copy the Phone number ID from Meta's WhatsApp → API Setup page."
+    return None
+
+
+def send_callmebot(phone: str, apikey: str, text: str, timeout: float = 20) -> str:
+    """Send to a personal number through CallMeBot. Raises WhatsAppError on failure."""
+    number = normalize_number(phone)
+    if not number:
+        raise WhatsAppError("No WhatsApp number set for this user.")
+    if not apikey:
+        raise WhatsAppError(f"No CallMeBot API key for +{number}. Get one by sending "
+                            "\"I allow callmebot to send me messages\" to CallMeBot on WhatsApp.")
+    query = urllib.parse.urlencode({"phone": f"+{number}", "text": text[:1500], "apikey": apikey})
+    try:
+        with urllib.request.urlopen(f"{CALLMEBOT_URL}?{query}", timeout=timeout) as resp:
+            body = resp.read().decode(errors="replace")
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode(errors="replace")
+        raise WhatsAppError(f"CallMeBot error {exc.code}: {_plain(body)}") from exc
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        raise WhatsAppError(f"Could not reach CallMeBot: {exc}") from exc
+    lowered = body.lower()
+    if "invalid" in lowered or "error" in lowered or "not allowed" in lowered:
+        raise WhatsAppError(f"CallMeBot: {_plain(body)}")
+    return "queued"
+
+
+def _plain(html: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html)).strip()[:300]
 
 
 def build_payload(to: str, text: str, mode: str, template: str, language: str) -> dict:
