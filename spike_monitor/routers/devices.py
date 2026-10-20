@@ -17,6 +17,7 @@ from ..models import (
     DEFAULT_PORTS,
     Brand,
     Alert,
+    ConfigBackup,
     CredentialProfile,
     Customer,
     Device,
@@ -29,6 +30,7 @@ from ..models import (
     utcnow,
 )
 from ..alerts.engine import KIND_LABELS
+from ..backups.service import can_backup
 from ..monitoring.poller import can_poll
 from ..security import verify_csrf
 
@@ -195,6 +197,9 @@ def device_detail(device_id: int, request: Request, db: Session = Depends(get_db
         "open_alerts": db.scalars(select(Alert).where(Alert.device_id == device_id, Alert.resolved_at.is_(None))
                                   .order_by(Alert.started_at)).all(),
         "alert_labels": KIND_LABELS,
+        "backups": db.scalars(select(ConfigBackup).where(ConfigBackup.device_id == device_id)
+                              .order_by(ConfigBackup.created_at.desc()).limit(15)).all(),
+        "can_backup": can_backup(device),
         "now": utcnow(),
     })
 

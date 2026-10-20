@@ -18,6 +18,8 @@
       <a href="/map" class="{{ 'active' if path.startswith('/map') }}">Network map</a>
       <a href="/alerts" class="{{ 'active' if path.startswith('/alerts') }}">Alerts <span class="nav-badge" id="nav-alerts" hidden></span></a>
       <a href="/discovery" class="{{ 'active' if path.startswith('/discovery') }}">Discovered</a>
+      {% if user and user.role in (Role.ADMIN, Role.TECHNICIAN) %}<a href="/backups" class="{{ 'active' if path.startswith('/backups') }}">Backups</a>
+      <a href="/tools" class="{{ 'active' if path.startswith('/tools') }}">Tools</a>{% endif %}
       {% if user and user.role == Role.ADMIN %}<a href="/commands" class="{{ 'active' if path.startswith('/commands') }}">Push settings</a>{% endif %}
       <div class="section">Inventory</div>
       <a href="/sites" class="{{ 'active' if path.startswith('/sites') }}">Sites</a>
@@ -29,6 +31,7 @@
       <div class="section">Administration</div>
       <a href="/admin/users" class="{{ 'active' if path.startswith('/admin/users') }}">Users</a>
       <a href="/admin/alert-settings" class="{{ 'active' if path.startswith('/admin/alert-settings') }}">Alert settings</a>
+      <a href="/admin/transfer" class="{{ 'active' if path.startswith('/admin/transfer') }}">Export / import</a>
       <a href="/admin/audit" class="{{ 'active' if path.startswith('/admin/audit') }}">Audit log</a>
       {% endif %}
     </nav>

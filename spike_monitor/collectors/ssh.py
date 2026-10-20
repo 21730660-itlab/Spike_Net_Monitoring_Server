@@ -7,6 +7,7 @@ key changes later the connection is refused until an admin clicks
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from dataclasses import dataclass
 
 from .common import CollectorError
@@ -51,7 +52,9 @@ def _legacy_algorithms() -> dict:
         return {}
 
 
-async def run_command(target: SshTarget, command: str, command_timeout: float = 60.0) -> SshResult:
+@contextlib.asynccontextmanager
+async def open_connection(target: SshTarget):
+    """Connect, check the host key and yield (connection, fingerprint)."""
     import asyncssh
 
     if not target.username:
@@ -88,13 +91,54 @@ async def run_command(target: SshTarget, command: str, command_timeout: float = 
                 "The device's SSH host key has changed. If the device was replaced or reset, an admin can "
                 "click 'Forget SSH key' on the device page; otherwise someone may be intercepting the connection."
             )
-        try:
-            result = await asyncio.wait_for(conn.run(command, check=False), timeout=command_timeout)
-        except asyncio.TimeoutError as exc:
-            raise CollectorError(f"The command did not finish within {command_timeout:.0f} seconds.") from exc
-        output = (result.stdout or "") + (result.stderr or "")
-        if isinstance(output, bytes):  # pragma: no cover
-            output = output.decode(errors="replace")
-        return SshResult(output=output, exit_status=result.exit_status, fingerprint=fingerprint)
+        yield conn, fingerprint
     finally:
         conn.close()
+
+
+async def _run(conn, command: str, command_timeout: float):
+    try:
+        result = await asyncio.wait_for(conn.run(command, check=False), timeout=command_timeout)
+    except asyncio.TimeoutError as exc:
+        raise CollectorError(f"The command did not finish within {command_timeout:.0f} seconds.") from exc
+    output = (result.stdout or "") + (result.stderr or "")
+    if isinstance(output, bytes):  # pragma: no cover
+        output = output.decode(errors="replace")
+    return output, result.exit_status
+
+
+async def run_command(target: SshTarget, command: str, command_timeout: float = 60.0) -> SshResult:
+    async with open_connection(target) as (conn, fingerprint):
+        output, status = await _run(conn, command, command_timeout)
+        return SshResult(output=output, exit_status=status, fingerprint=fingerprint)
+
+
+async def run_and_download(target: SshTarget, command: str, remote_paths: list[str], cleanup: str = "",
+                           command_timeout: float = 120.0) -> tuple[bytes, str]:
+    """Run ``command`` (which creates a file), download the first of ``remote_paths`` that exists
+    over SFTP, then run ``cleanup``. Returns (file contents, host key fingerprint).
+    """
+    import asyncssh
+
+    async with open_connection(target) as (conn, fingerprint):
+        output, _ = await _run(conn, command, command_timeout)
+        last_error: Exception | None = None
+        try:
+            async with conn.start_sftp_client() as sftp:
+                for path in remote_paths:
+                    try:
+                        async with sftp.open(path, "rb") as f:
+                            data = await asyncio.wait_for(f.read(), timeout=command_timeout)
+                        return data, fingerprint
+                    except (asyncssh.SFTPError, OSError) as exc:
+                        last_error = exc
+        except (asyncssh.Error, OSError, asyncio.TimeoutError) as exc:
+            last_error = exc
+        finally:
+            if cleanup:
+                try:
+                    await _run(conn, cleanup, 30)
+                except CollectorError:
+                    pass
+        hint = f" Device said: {output.strip()[:200]}" if output.strip() else ""
+        raise CollectorError(f"Could not download {remote_paths[0]}: {last_error}.{hint}")

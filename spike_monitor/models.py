@@ -594,3 +594,24 @@ class AppSetting(Base):
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str] = mapped_column(Text)
+
+
+class ConfigBackup(Base):
+    """One configuration backup. Files live in <data dir>/backups/<device id>/."""
+
+    __tablename__ = "config_backups"
+    __table_args__ = (Index("ix_backup_device_kind_ts", "device_id", "kind", "created_at"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    device_id: Mapped[int] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String(16))  # export (.rsc), binary (.backup), ubnt (system.cfg)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    path: Mapped[str] = mapped_column(String(255), default="")  # relative to the backups folder
+    size: Mapped[int] = mapped_column(Integer, default=0)
+    checksum: Mapped[str] = mapped_column(String(64), default="")  # of the content, ignoring the date header
+    changed: Mapped[bool] = mapped_column(Boolean, default=True)  # different from the previous backup
+    ok: Mapped[bool] = mapped_column(Boolean, default=True)
+    error: Mapped[str] = mapped_column(Text, default="")
+    trigger: Mapped[str] = mapped_column(String(64), default="")  # "schedule" or the username
+
+    device: Mapped[Device] = relationship()

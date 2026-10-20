@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Tools · Spike Net Monitor{% endblock %}
+{% block heading %}Tools{% endblock %}
+{% block content %}
+<div>
+  <div class="panel" id="calc"><h2>🧮 IP calculator</h2>
+    <form method="get" action="/tools#calc" class="actions">
+      <input type="text" name="ip" value="{{ form.ip or '' }}" placeholder="192.168.1.10/24 or 10.0.0.5 255.255.255.0" style="flex:1;min-width:220px">
+      <button class="btn primary">Calculate</button>
+    </form>
+    {% if calc_error %}<div class="flash error" style="margin-top:10px">{{ calc_error }}</div>{% endif %}
+    {% if calc %}
+    <dl class="kv" style="margin-top:12px">
+      <dt>Network</dt><dd><b>{{ calc.network }}</b>{% if calc.ip_class %} <span class="muted">class {{ calc.ip_class }}{{ ", private" if calc.private else ", public" }}</span>{% endif %}</dd>
+      <dt>Netmask</dt><dd>{{ calc.netmask }} <span class="muted">(/{{ calc.prefix }})</span></dd>
+      <dt>Wildcard</dt><dd>{{ calc.wildcard }}</dd>
+      <dt>Network address</dt><dd>{{ calc.network_address }}</dd>
+      <dt>Broadcast</dt><dd>{{ calc.broadcast }}</dd>
+      <dt>Usable hosts</dt><dd>{{ calc.first_host }} – {{ calc.last_host }}</dd>
+      <dt>Number of hosts</dt><dd>{{ calc.usable }} usable <span class="muted">({{ calc.total }} addresses)</span></dd>
+      {% if calc.binary_mask %}<dt>Mask in binary</dt><dd style="font-family:Consolas,monospace;font-size:.85rem">{{ calc.binary_mask }}</dd>{% endif %}
+    </dl>{% endif %}
+  </div>
+
+  <div class="panel" id="plan"><h2>✂️ Split a network / plan subnets (VLSM)</h2>
+    <form method="get" action="/tools/plan#plan">
+      <div class="form-grid">
+        <div><label>Network</label><input type="text" name="base" value="{{ form.base or '' }}" placeholder="10.10.0.0/22"></div>
+        <div><label>Split into equal /prefix</label><input type="text" name="prefix" value="{{ form.prefix or '' }}" placeholder="e.g. 26"></div>
+      </div>
+      <p><label>…or subnets with host counts (biggest first is automatic)</label>
+        <textarea name="needs" placeholder="Tower Jounieh 120, Tower Aley 60, Management 14, PTP links 2">{{ form.needs or '' }}</textarea></p>
+      <button class="btn primary">Plan</button>
+    </form>
+    {% if plan_error %}<div class="flash error" style="margin-top:10px">{{ plan_error }}</div>{% endif %}
+    {% if split %}<p style="margin-top:12px"><b>{{ split|length }}</b> subnets{{ " (first 256 shown)" if split|length == 256 }}:</p>
+      <div style="columns:2;font-family:Consolas,monospace;font-size:.88rem">{% for s in split %}<div>{{ s }}</div>{% endfor %}</div>{% endif %}
+    {% if vlsm %}<div class="table-wrap" style="margin-top:12px"><table>
+      <thead><tr><th>Name</th><th>Needs</th><th>Subnet</th><th>Mask</th><th>Usable range</th><th>Usable</th></tr></thead>
+      <tbody>{% for p in vlsm %}<tr><td>{{ p.name }}</td><td>{{ p.hosts }}</td><td><b>{{ p.subnet }}</b></td><td>{{ p.mask }}</td><td>{{ p.first }} – {{ p.last }}</td><td>{{ p.usable }}</td></tr>{% endfor %}</tbody>
+    </table></div>{% endif %}
+  </div>
+</div>
+
+<div class="panel" id="net"><h2>📡 Ping / traceroute from the server</h2>
+  <form method="post" action="/tools/network#net" class="actions">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+    <input type="text" name="host" value="{{ form.host or '' }}" placeholder="IP address or host name" style="min-width:240px">
+    <input type="number" name="count" value="5" min="1" max="50" style="width:90px" title="Number of pings">
+    <button class="btn primary" name="action" value="ping">Ping</button>
+    <button class="btn" name="action" value="trace">Traceroute</button>
+  </form>
+  {% if net_error %}<div class="flash error" style="margin-top:10px">{{ net_error }}</div>{% endif %}
+  {% if ping %}{% set o = ping.o %}
+    <div class="grid cards" style="margin-top:12px">
+      <div class="card {{ 'up' if o.is_alive else 'down' }}"><div class="num">{{ "Reply" if o.is_alive else "No reply" }}</div><div class="lbl">{{ ping.host }}</div></div>
+      <div class="card total"><div class="num">{{ "%.1f"|format(o.avg_ms) if o.avg_ms is not none else "—" }}</div><div class="lbl">Average (ms)</div></div>
+      <div class="card {{ 'down' if o.loss_pct else 'up' }}"><div class="num">{{ "%.0f"|format(o.loss_pct) }}%</div><div class="lbl">Loss ({{ ping.count }} pings)</div></div>
+    </div>{% endif %}
+  {% if trace %}
+    {% if trace.hops %}<div class="table-wrap" style="margin-top:12px"><table>
+      <thead><tr><th>Hop</th><th>Address</th><th>Average</th><th>Loss</th></tr></thead>
+      <tbody>{% for h in trace.hops %}<tr><td>{{ h.distance }}</td><td>{{ h.address }}</td><td>{{ "%.1f ms"|format(h.avg_ms) if h.avg_ms is not none else "—" }}</td><td>{{ "%.0f%%"|format(h.loss_pct) }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% else %}<pre class="config" style="margin-top:12px">{{ trace.raw or "No answer." }}</pre>{% endif %}
+  {% endif %}
+</div>
+<div class="panel" id="helper"><h2>🖥️ Winbox / SSH helper for this PC</h2>
+  <p>The <b>Winbox</b> and <b>SSH</b> buttons on a device page open the device on <b>your PC</b>, already logged in.
+    Each PC needs this small helper once (no administrator rights, nothing else to install):</p>
+  <ol>
+    <li><a class="btn small primary" href="/tools/helper.zip">⬇ Download SpikeNetHelper.zip</a></li>
+    <li>Right-click the zip → <b>Extract All</b>, open the folder and double-click <b>install.bat</b>.</li>
+    <li>If it can't find Winbox it asks where <b>winbox.exe</b> is. For SSH it uses PuTTY if installed, otherwise Windows' own ssh.</li>
+  </ol>
+  <p class="muted">Security: the button gives the helper a one-time code that expires after 60 seconds; the password is never put in a link.
+    The helper only accepts links from this server ({{ request.base_url }}). Every use is in the audit log.</p>
+</div>
+{% endblock %}

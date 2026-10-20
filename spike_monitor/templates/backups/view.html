@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block heading %}{{ b.device.name }}: {{ labels.get(b.kind, b.kind) }}{% endblock %}
+{% block content %}
+<div class="panel">
+  <div class="actions" style="margin-bottom:10px">
+    <a class="btn" href="/devices/{{ b.device_id }}#backups">← Device</a>
+    <a class="btn" href="/backups/{{ b.id }}/download">⬇ Download</a>
+    <a class="btn" href="/backups/{{ b.id }}/diff">Compare with previous</a>
+    <span class="muted">{{ b.created_at|dt }} · {{ b.size }} bytes · by {{ b.trigger }}</span>
+  </div>
+  <pre class="config">{{ text }}</pre>
+</div>
+{% endblock %}

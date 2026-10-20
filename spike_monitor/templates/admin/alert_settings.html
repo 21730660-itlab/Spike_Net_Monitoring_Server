@@ -41,7 +41,8 @@ prov.addEventListener("change", showProvider); showProvider();
     <p><label>For</label><select name="desktop_min_severity" style="width:auto">
       {% for v, l in [("critical", "Critical only"), ("warning", "Critical + warnings"), ("info", "Everything")] %}<option value="{{ v }}" {{ 'selected' if s.desktop_min_severity == v }}>{{ l }}</option>{% endfor %}
     </select></p>
-    <p class="help">Every PC or phone that has this app open in a browser also gets a popup and sound for new alerts (click 🔔 at the top to allow notifications).</p>
+    <p class="help">Every PC or phone that has this app open in a browser also gets a popup and sound for new alerts (click 🔇 at the top to turn sound on).</p>
+    <p class="help">When the server runs in the background (install_service.bat) Windows does not show its popups on the desktop; keep a browser tab open, or use Telegram / WhatsApp.</p>
   </div>
   <div class="panel"><h2>📱 WhatsApp</h2>
     <p><label class="check"><input type="checkbox" name="whatsapp_enabled" {{ 'checked' if s.whatsapp_enabled }}> Send WhatsApp alerts</label></p>

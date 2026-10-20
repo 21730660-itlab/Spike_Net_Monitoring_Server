@@ -74,3 +74,11 @@ def test_last_admin_cannot_be_demoted(admin):
     r = admin.post(f"/admin/users/{uid}/edit", data={"username": "admin", "role": "viewer", "is_active": "on",
                                                      "csrf_token": admin.token})
     assert r.status_code == 422
+
+
+def test_two_messages_in_a_row_are_both_shown(admin):
+    import re
+    admin.post("/sites/new", data={"name": "A", "csrf_token": admin.token}, follow_redirects=False)
+    admin.post("/sites/new", data={"name": "B", "csrf_token": admin.token}, follow_redirects=False)
+    flashes = re.findall(r'class="flash[^"]*">([^<]*)', admin.get("/sites").text)
+    assert flashes == ["Site saved.", "Site saved."]

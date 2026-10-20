@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block heading %}Export / import everything{% endblock %}
+{% block content %}
+<div class="grid two">
+  <div class="panel"><h2>⬇ Export</h2>
+    <p>One file with all <b>sites, VLANs, devices (with their passwords and ports), credential and port profiles,
+      customers</b> and the <b>alert and backup settings</b>. Use it to move to a new PC or to recover after a crash.</p>
+    <form method="post" action="/admin/transfer/export">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+      <p><label>Password for the file</label><input type="password" name="password" autocomplete="new-password" required minlength="8"></p>
+      <p><label>Repeat the password</label><input type="password" name="confirm" autocomplete="new-password" required minlength="8"></p>
+      <p><label class="check"><input type="checkbox" name="users" checked> Include user accounts</label></p>
+      <button class="btn primary">Download export file</button>
+    </form>
+    <p class="help">The file is encrypted with this password. <b>Without the password it cannot be opened, not even by us</b>; keep it somewhere safe (not on the same PC).</p>
+  </div>
+  <div class="panel"><h2>⬆ Import</h2>
+    <p>Adds what is missing and updates what matches (devices by IP, customers by MAC, sites and profiles by name).
+      <b>Nothing is deleted.</b> Existing user accounts are never changed.</p>
+    <form method="post" action="/admin/transfer/import" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+      <p><input type="file" name="file" accept=".spike" required></p>
+      <p><label>File password</label><input type="password" name="password" autocomplete="off" required></p>
+      <p><label class="check"><input type="checkbox" name="users" checked> Add the user accounts from the file</label></p>
+      <p><label class="check"><input type="checkbox" name="settings" checked> Replace alert and backup settings with the ones in the file</label></p>
+      <button class="btn primary">Import</button>
+    </form>
+  </div>
+</div>
+<div class="panel"><h2>📄 Device list as CSV (no passwords)</h2>
+  <p>For Excel or reports. The same columns as <a href="/devices/import">Import CSV</a>, so it can be edited and imported back.</p>
+  <a class="btn" href="/devices/export.csv">Download devices.csv</a>
+</div>
+{% endblock %}

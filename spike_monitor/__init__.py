@@ -1,3 +1,3 @@
 """Spike Net Monitoring Server - network monitoring for a Layer 2 ISP."""
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"

@@ -100,16 +100,20 @@ Windows PC 24/7; the team uses it from a browser on any PC or phone.
   or a Customer (name + MAC, linked to the device that sees it), on the Discovered page and in
   Import from device.
 
-### Phase 4: backups and tools
-- Config backups: MikroTik `.rsc` export + `.backup` over SSH, Ubiquiti `system.cfg`;
-  scheduled + manual, history, side-by-side diff, download.
-- Encrypted export/import of the whole inventory **including passwords** (password-protected file),
-  plus a plain CSV export without passwords.
-- IP / subnet calculator (CIDR, masks, ranges, VLSM).
-- Ping/traceroute tool.
-- **Open in Winbox / SSH / web** buttons via a small helper installed on each technician PC
-  (`winbox://` link handler that starts `winbox.exe` already logged in).
-- Run as a Windows service; installer.
+### Phase 4: done
+- Config backups over SSH: MikroTik `/export` (.rsc) and `/system backup` (.backup, fetched over SFTP,
+  then removed from the router), Ubiquiti `/tmp/system.cfg`. Daily at a set time (default 02:00),
+  manual per device or all, keep the last N per device. Unchanged configs share the previous file.
+  History on the device page, view, download, side-by-side comparison of any two versions.
+- Encrypted export/import of everything (password, PBKDF2-SHA256 600k + Fernet), including device
+  and profile passwords, users and alert/backup settings; import merges and never deletes or
+  overwrites existing users. CSV export of devices without passwords (same columns as the import).
+- Open in Winbox / SSH / Web: one-time 60-second token; a PowerShell helper on each technician PC
+  (spikenet:// link, per-user install, no admin rights) fetches the login and starts Winbox
+  (or PuTTY / Windows ssh). The helper accepts links only from its own server.
+- Tools: IP calculator (IPv4/IPv6), equal split, VLSM planner, ping and traceroute from the server.
+- Background mode: Task Scheduler task at startup as SYSTEM, restart on failure, no time limit,
+  firewall rule; log file in the data folder.
 
 ### Later (agreed, not scheduled)
 - Mimosa support.

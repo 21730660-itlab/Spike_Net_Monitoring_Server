@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block heading %}{{ new.device.name }}: what changed{% endblock %}
+{% block content %}
+<div class="panel">
+  <form method="get" class="actions" style="margin-bottom:10px">
+    <a class="btn" href="/devices/{{ new.device_id }}#backups">← Device</a>
+    <span>Compare <b>{{ new.created_at|dt }}</b> with</span>
+    <select name="against" style="width:auto" onchange="this.form.submit()">
+      {% for c in choices %}<option value="{{ c.id }}" {{ 'selected' if old and c.id == old.id }}>{{ c.created_at|dt }}{{ "" if c.changed else " (no change)" }}</option>{% endfor %}
+    </select>
+  </form>
+  {% if not old %}<p class="muted">There is no earlier, different backup to compare with.</p>
+  {% elif not table or (added == 0 and removed == 0) %}<p>✅ No differences.</p>
+  {% else %}
+  <p><span class="pill up">+{{ added }} line(s)</span> <span class="pill down">−{{ removed }} line(s)</span>
+    <span class="muted">Left: {{ old.created_at|dt }} · Right: {{ new.created_at|dt }}. Only changed parts are shown.</span></p>
+  <div class="table-wrap diff">{{ table|safe }}</div>
+  {% endif %}
+</div>
+{% endblock %}

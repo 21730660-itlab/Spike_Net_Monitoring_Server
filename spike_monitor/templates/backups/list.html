@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Backups · Spike Net Monitor{% endblock %}
+{% block heading %}Configuration backups{% endblock %}
+{% block content %}
+<div class="grid two">
+  <div class="panel"><h2>Daily backup</h2>
+    {% if user.role == Role.ADMIN %}
+    <form method="post" action="/backups/settings">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+      <p><label class="check"><input type="checkbox" name="enabled" {{ 'checked' if s.enabled }}> Back up all MikroTik and Ubiquiti devices every day</label></p>
+      <div class="form-grid">
+        <div><label>At (server time)</label><input type="text" name="time" value="{{ s.time }}" placeholder="02:00"></div>
+        <div><label>Keep the last … backups per device</label><input type="number" name="keep" value="{{ s.keep }}" min="1"></div>
+        <div><label>Devices at the same time</label><input type="number" name="concurrency" value="{{ s.concurrency }}" min="1" max="20"></div>
+      </div>
+      <p><label class="check"><input type="checkbox" name="binary" {{ 'checked' if s.binary }}> Also save the full MikroTik backup file (.backup) for restoring with Winbox</label></p>
+      <button class="btn primary">Save</button>
+    </form>
+    {% else %}<p>{{ "Every day at " ~ s.time if s.enabled else "Daily backup is off." }} Keeping {{ s.keep }} per device.</p>{% endif %}
+  </div>
+  <div class="panel"><h2>How it works</h2>
+    <ul class="muted" style="margin:0;padding-left:18px">
+      <li>Backups use the device's <b>SSH</b> login and port.</li>
+      <li>MikroTik: a text <b>export (.rsc)</b>, used to show what changed, and a <b>.backup</b> file for a full restore.</li>
+      <li>Ubiquiti airOS: the <b>system.cfg</b> file.</li>
+      <li>If nothing changed since the last backup, no new file is stored.</li>
+      <li>To restore: download the file and load it with Winbox (Files → drag the .backup → System → Backup → Restore) or the airOS page.</li>
+      <li>MikroTik exports leave out passwords; the .backup file contains them, so keep downloads safe.</li>
+    </ul>
+    {% if user.role == Role.ADMIN %}
+    <form method="post" action="/backups/run" style="margin-top:12px">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+      <button class="btn" {{ 'disabled' if running }}>{{ "⏳ Running…" if running else "💾 Back up all devices now" }}</button>
+    </form>{% endif %}
+  </div>
+</div>
+
+<div class="panel">
+  <div class="table-wrap"><table>
+    <thead><tr><th>Device</th><th>Site</th><th>Last backup</th><th>Last change</th><th>Saved</th><th></th></tr></thead>
+    <tbody>{% for d in devices %}{% set l = latest.get(d.id, {}) %}
+      <tr><td><a href="/devices/{{ d.id }}#backups">{{ d.name }}</a> <span class="muted">{{ d.ip_address }}</span></td>
+        <td>{{ d.site.name if d.site else "" }}</td>
+        <td>{% if l.last %}{% if l.last.ok %}<span class="pill up">ok</span>{% else %}<span class="pill down" title="{{ l.last.error }}">failed</span>{% endif %}
+            {{ l.last.created_at|dt }}{% if not l.last.ok %}<br><span class="muted" style="font-size:.8rem">{{ l.last.error|truncate(90) }}</span>{% endif %}
+            {% else %}<span class="muted">never</span>{% endif %}</td>
+        <td>{% if l.last_change %}<a href="/backups/{{ l.last_change.id }}/diff">{{ l.last_change.created_at|dt }}</a>{% else %}—{% endif %}</td>
+        <td>{{ counts.get(d.id, 0) }}</td>
+        <td><form class="inline" method="post" action="/devices/{{ d.id }}/backup"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><button class="btn small">Back up now</button></form></td></tr>
+    {% else %}<tr><td colspan="6" class="muted">No MikroTik or Ubiquiti devices with SSH turned on.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</div>
+{% endblock %}

@@ -17,10 +17,11 @@ from .db import SessionLocal, init_engine
 from .deps import LoginRequired, PasswordChangeRequired, render
 from .models import Role, User
 from .alerts.engine import AlertManager
+from .backups.service import BackupManager
 from .monitoring.engine import MonitorEngine
 from .monitoring.poller import StatsPoller
-from .routers import (admin, alerts, auth, commands, dashboard, device_actions, devices, discovery, history,
-                      netmap)
+from .routers import (admin, alerts, auth, backups, commands, dashboard, device_actions, devices, discovery,
+                      history, launch, netmap, tools, transfer)
 from .routers.inventory import ALL_CRUDS
 from .security import SecretBox, hash_password
 
@@ -71,12 +72,16 @@ def create_app(cfg: Settings | None = None) -> FastAPI:
     alert_manager = AlertManager(SessionLocal, box, stats_interval=cfg.stats_interval)
     engine.listeners.append(alert_manager.schedule)  # check for alerts after every ping round
 
+    backup_manager = BackupManager(SessionLocal, box, cfg.data_dir)
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         if cfg.monitoring_enabled:
             engine.start()
             poller.start()
+            backup_manager.start()
         yield
+        await backup_manager.stop()
         await poller.stop()
         await engine.stop()
 
@@ -87,6 +92,7 @@ def create_app(cfg: Settings | None = None) -> FastAPI:
     app.state.engine = engine
     app.state.poller = poller
     app.state.alert_manager = alert_manager
+    app.state.backups = backup_manager
     app.state.session_factory = SessionLocal
     app.state.background_tasks = set()
 
@@ -98,6 +104,7 @@ def create_app(cfg: Settings | None = None) -> FastAPI:
     app.include_router(dashboard.router)
     for crud in ALL_CRUDS:
         app.include_router(crud.build_router())
+    app.include_router(transfer.router)  # before /devices/{id} so /devices/export.csv matches
     # After the generic device routes so /devices/new wins over /devices/{id}
     app.include_router(device_actions.router)
     app.include_router(devices.router)
@@ -106,6 +113,9 @@ def create_app(cfg: Settings | None = None) -> FastAPI:
     app.include_router(netmap.router)
     app.include_router(alerts.router)
     app.include_router(history.router)
+    app.include_router(backups.router)
+    app.include_router(tools.router)
+    app.include_router(launch.router)
     app.include_router(admin.router)
 
     @app.exception_handler(LoginRequired)

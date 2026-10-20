@@ -5,7 +5,7 @@ It runs on one Windows PC and your team opens it in a browser from any PC or pho
 
 See [docs/DESIGN.md](docs/DESIGN.md) for the full requirements and the phase plan.
 
-## What works now (phases 1–3)
+## What works now (all phases)
 
 - Users with roles (Admin / Technician / Viewer), audit log
 - Sites, VLANs, customers (MAC list), credential profiles, port profiles
@@ -27,6 +27,11 @@ See [docs/DESIGN.md](docs/DESIGN.md) for the full requirements and the phase pla
 - Notifications: Telegram (recommended, see [docs/TELEGRAM_SETUP.md](docs/TELEGRAM_SETUP.md)),
   WhatsApp (CallMeBot or Meta Cloud API, see [docs/WHATSAPP_SETUP.md](docs/WHATSAPP_SETUP.md)),
   Windows popup + sound on the server PC, and popups + sound in every open browser (click 🔇 to turn sound on)
+- Config backups (MikroTik .rsc + .backup, Ubiquiti system.cfg): daily, history, compare versions, download
+- Export / import everything in one password-protected file; device list as CSV
+- Open a device in Winbox / SSH already logged in (helper from Tools), or its web page
+- Tools: IP / subnet calculator, VLSM planner, ping and traceroute
+- Runs in the background at Windows startup (`scripts\install_service.bat`)
 
 ## Preparing your devices
 
@@ -67,6 +72,23 @@ You do **not** need Windows Server; a normal Windows 10/11 PC that stays on work
 
 Data (database and the encryption key) is stored in `C:\ProgramData\SpikeNetMonitor`.
 **Back up `secret.key` together with `spike.db`**: without the key, stored device passwords cannot be read.
+
+## Run in the background (recommended once everything works)
+
+1. Close `run.bat` if it is open.
+2. Right-click `scripts\install_service.bat` → **Run as administrator**.
+
+The server then starts with Windows (even before anyone logs in), has no window, and restarts by itself
+if it stops. Log file: `C:\ProgramData\SpikeNetMonitor\server.log`.
+After updating the files, run `scripts\restart_service.bat` as administrator.
+To go back to `run.bat`, run `scripts\uninstall_service.bat` as administrator.
+In background mode Windows does not show the server's own desktop popups; browser popups,
+Telegram and WhatsApp still work.
+
+## Winbox / SSH buttons
+
+On each technician PC: **Tools → Download SpikeNetHelper.zip**, extract it, double-click `install.bat`.
+The Winbox and SSH buttons on a device page then open the device on that PC, already logged in.
 
 ## Settings
 

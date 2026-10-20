@@ -93,7 +93,8 @@ def render(request: Request, name: str, context: dict | None = None, status_code
 
 
 def flash(request: Request, message: str, category: str = "success") -> None:
-    request.session.setdefault("flash", []).append({"message": message, "category": category})
+    # Reassign (don't append in place): the session is only saved when a key is set.
+    request.session["flash"] = [*request.session.get("flash", []), {"message": message, "category": category}]
 
 
 def pop_flashes(request: Request) -> list[dict]:

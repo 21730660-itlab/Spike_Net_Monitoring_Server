@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block heading %}Opening {{ device.name }} in {{ "Winbox" if kind == "winbox" else "SSH" }}…{% endblock %}
+{% block content %}
+<div class="panel" style="max-width:640px">
+  <p>Your browser may ask to open the <b>Spike Net helper</b>: choose <b>Open</b> (tick "always allow" to skip this next time).</p>
+  <p><a class="btn primary" id="go" href="{{ link }}">Open again</a> <a class="btn" href="/devices/{{ device.id }}">← Back to the device</a></p>
+  <p class="muted">The link works once, within 60 seconds. Nothing happens? The helper is not installed on this PC yet:
+    <a href="/tools#helper">install it from Tools</a> (one minute, no administrator rights).</p>
+</div>
+{% endblock %}
+{% block scripts %}<script>window.location.href = document.getElementById("go").href;</script>{% endblock %}
