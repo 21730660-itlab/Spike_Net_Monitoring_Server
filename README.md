@@ -19,7 +19,7 @@ See [docs/DESIGN.md](docs/DESIGN.md) for the full requirements and the phase pla
 
 You do **not** need Windows Server; a normal Windows 10/11 PC that stays on works.
 
-1. Install Python 3.11 or newer from <https://www.python.org/downloads/>.
+1. Install Python 3.11 or newer (3.13 recommended) from <https://www.python.org/downloads/>.
    During setup, tick **"Add python.exe to PATH"**.
 2. Copy this folder to the PC, for example `C:\SpikeNet`.
 3. Double-click `scripts\install.bat` (only once).
