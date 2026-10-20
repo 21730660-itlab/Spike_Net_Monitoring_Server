@@ -70,6 +70,8 @@ Windows PC 24/7; the team uses it from a browser on any PC or phone.
 - Warnings are sent only after a delay (default 5 min); critical at once; reminders for unacknowledged
   critical alerts (default every 60 min); recovery messages with the duration.
 - Acknowledge (one / all), maintenance mode per device and per site (alerts recorded, not sent).
+- Telegram (recommended): bot token, optional team group with its own severity, personal chats per user
+  with the same severity / site filters, "Find chats" helper and test button. Guide: docs/TELEGRAM_SETUP.md.
 - WhatsApp through CallMeBot (free, alerts to personal numbers, per-user API key) or the Meta
   WhatsApp Cloud API: template or text mode, per-user number, severity and site subscriptions,
   several alerts grouped into one message, notification log, test button. Setup guide: docs/WHATSAPP_SETUP.md.

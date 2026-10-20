@@ -24,7 +24,8 @@ See [docs/DESIGN.md](docs/DESIGN.md) for the full requirements and the phase pla
   (the street map background needs internet on the PC viewing it)
 - Alerts: down (one alert per tower, not per device behind it), degraded, high CPU / temperature, weak signal,
   broadcast storm / loop, reboots; acknowledge, maintenance mode, reminders and recovery messages
-- Notifications: WhatsApp (Meta Cloud API, see [docs/WHATSAPP_SETUP.md](docs/WHATSAPP_SETUP.md)),
+- Notifications: Telegram (recommended, see [docs/TELEGRAM_SETUP.md](docs/TELEGRAM_SETUP.md)),
+  WhatsApp (CallMeBot or Meta Cloud API, see [docs/WHATSAPP_SETUP.md](docs/WHATSAPP_SETUP.md)),
   Windows popup + sound on the server PC, and popups + sound in every open browser (click 🔇 to turn sound on)
 
 ## Preparing your devices

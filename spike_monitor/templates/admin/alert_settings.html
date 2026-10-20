@@ -83,6 +83,29 @@ prov.addEventListener("change", showProvider); showProvider();
       Now: {% for u in recipients %}<b>{{ u.username }}</b> {{ u.phone }}{% if s.wa_provider == 'callmebot' and not u.callmebot_key_enc %} <span style="color:var(--down)">(no CallMeBot key)</span>{% endif %}{{ ", " if not loop.last }}{% else %}nobody yet{% endfor %}.</p>
   </div>
 </div>
+<div class="panel"><h2>✈️ Telegram <span class="pill up" style="font-size:.7rem">recommended</span></h2>
+  <p><label class="check"><input type="checkbox" name="telegram_enabled" {{ 'checked' if s.telegram_enabled }}> Send Telegram alerts</label></p>
+  <div class="grid two">
+    <div>
+      <div class="flash" style="background:var(--bg)"><b>Set up (5 minutes, free, no limits):</b>
+        <ol style="margin:6px 0 0;padding-left:20px">
+          <li>In Telegram, open <b>@BotFather</b>, send <code>/newbot</code>, choose a name (e.g. <i>Spike Net Alerts</i>) and a username ending in <i>bot</i>.</li>
+          <li>Copy the <b>token</b> it gives you into <b>Bot token</b> and click <b>Save settings</b>.</li>
+          <li>Everyone who wants alerts opens your bot and presses <b>Start</b>. For a team group, add the bot to the group and send any message there.</li>
+          <li>Click <b>Find chats</b> (below) to see the chat IDs, then put each person's ID on their user (Users page) or the group ID here.</li>
+        </ol></div>
+    </div>
+    <div class="form-grid" style="align-content:start">
+      <div><label>Bot token</label><input type="password" name="tg_token" autocomplete="new-password" placeholder="{{ '•••••• saved' if has_tg_token else '123456789:AAH...' }}">
+        {% if has_tg_token %}<label class="check" style="font-weight:400"><input type="checkbox" name="clear_tg_token"> Remove saved token</label>{% endif %}</div>
+      <div><label>Team group chat ID (optional)</label><input type="text" name="tg_group_chat_id" value="{{ s.tg_group_chat_id }}" placeholder="e.g. -1001234567890"></div>
+      <div><label>Group gets</label><select name="tg_group_min_severity">
+        {% for v, l in [("critical", "Critical only"), ("warning", "Critical + warnings"), ("info", "Everything")] %}<option value="{{ v }}" {{ 'selected' if s.tg_group_min_severity == v }}>{{ l }}</option>{% endfor %}
+      </select></div>
+    </div>
+  </div>
+  <p class="help">Personal recipients: {% for u in tg_recipients %}<b>{{ u.username }}</b> ({{ u.telegram_chat_id }}){{ ", " if not loop.last }}{% else %}nobody yet{% endfor %}.</p>
+</div>
 <button class="btn primary">Save settings</button>
 </form>
 
@@ -94,6 +117,17 @@ prov.addEventListener("change", showProvider); showProvider();
       {% if s.wa_provider == 'callmebot' %}<input type="text" name="apikey" placeholder="CallMeBot key (if not saved)" style="width:auto;min-width:180px">{% endif %}
       <button class="btn">Send WhatsApp test</button>
     </form>
+    <form method="post" action="/admin/alert-settings/test-telegram" class="actions" style="margin-top:10px">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+      <input type="text" name="chat_id" placeholder="Telegram chat ID" style="width:auto;min-width:180px" value="{{ user.telegram_chat_id or s.tg_group_chat_id }}">
+      <button class="btn">Send Telegram test</button>
+      <a class="btn" href="/admin/alert-settings/telegram-chats">Find chats</a>
+    </form>
+    {% if chats is not none %}
+    <div class="flash" style="background:var(--bg);margin-top:10px"><b>Chats that wrote to your bot:</b>
+      {% for c in chats %}<div><code>{{ c.id }}</code> {{ c.name }} <span class="muted">({{ c.type }})</span></div>
+      {% else %}<div class="muted">None yet. Open the bot in Telegram, press Start (or send a message in the group), then click Find chats again.</div>{% endfor %}
+    </div>{% endif %}
     <form method="post" action="/admin/alert-settings/test-desktop" style="margin-top:10px">
       <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><button class="btn">Show desktop test popup</button>
     </form>

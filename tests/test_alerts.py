@@ -383,3 +383,98 @@ def test_user_form_saves_callmebot_key_encrypted(app, admin):
         assert app.state.secret_box.decrypt(u.callmebot_key_enc) == "987654"
         uid = u.id
     assert "987654" not in admin.get(f"/admin/users/{uid}/edit").text
+
+
+class _JsonResp(io.BytesIO):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def test_telegram_group_and_personal_chats(app, admin, mgr, monkeypatch):
+    from spike_monitor.alerts import telegram
+    ids = tree()
+    box = app.state.secret_box
+    with SessionLocal() as db:
+        s = load_settings(db)
+        s.telegram_enabled, s.tg_token_enc, s.tg_group_chat_id = True, box.encrypt("123:ABC"), "-100999"
+        s.tg_group_min_severity, s.desktop_enabled = "critical", False
+        save_settings(db, s)
+        t1 = db.get(Site, ids["t1"])
+        db.add_all([User(username="tech1", password_hash="x", telegram_alerts=True, telegram_chat_id="555",
+                         alert_sites=[t1]),
+                    User(username="nochat", password_hash="x", telegram_alerts=True, telegram_chat_id="")])
+        db.commit()
+    calls = []
+
+    def fake_urlopen(req, timeout):
+        params = urllib.parse.parse_qs(req.data.decode())
+        calls.append((req.full_url, params["chat_id"][0], params["text"][0]))
+        return _JsonResp(json.dumps({"ok": True, "result": {"message_id": 7}}).encode())
+
+    monkeypatch.setattr(telegram.urllib.request, "urlopen", fake_urlopen)
+    set_dev(ids["core"], status=Status.DOWN)  # POP, critical -> group only (tech1 is subscribed to Tower 1)
+    set_dev(ids["ptp"], status=Status.UNREACHABLE)
+    asyncio.run(mgr.deliver(mgr.reconcile()))
+    assert [(c[1]) for c in calls] == ["-100999"] and "bot123:ABC/sendMessage" in calls[0][0]
+    assert "DOWN: Core" in calls[0][2]
+
+    calls.clear()
+    set_dev(ids["core"], status=Status.UP)
+    set_dev(ids["ptp"], status=Status.DOWN)  # Tower 1, critical -> group and tech1
+    asyncio.run(mgr.deliver(mgr.reconcile()))
+    chats = sorted(c[1] for c in calls)
+    assert chats == ["-100999", "555"]
+    tech_text = [c[2] for c in calls if c[1] == "555"][0]
+    assert "PTP T1" in tech_text and "Core" not in tech_text  # only Tower 1 for tech1
+
+
+def test_telegram_errors_and_find_chats(app, admin, monkeypatch):
+    from spike_monitor.alerts import telegram
+
+    def forbidden(req, timeout):
+        raise urllib.error.HTTPError(req.full_url, 403, "Forbidden", {},
+                                     io.BytesIO(b'{"ok":false,"description":"Forbidden: bot was blocked by the user"}'))
+
+    monkeypatch.setattr(telegram.urllib.request, "urlopen", forbidden)
+    with pytest.raises(telegram.TelegramError, match="press Start"):
+        telegram.send("1:A", "555", "hi")
+    with pytest.raises(telegram.TelegramError, match="not configured"):
+        telegram.send("", "555", "hi")
+
+    updates = {"ok": True, "result": [
+        {"message": {"chat": {"id": 555, "first_name": "Ali", "username": "ali_noc", "type": "private"}}},
+        {"message": {"chat": {"id": -100999, "title": "NOC team", "type": "supergroup"}}},
+        {"message": {"chat": {"id": 555, "first_name": "Ali", "type": "private"}}},
+    ]}
+    monkeypatch.setattr(telegram.urllib.request, "urlopen",
+                        lambda req, timeout: _JsonResp(json.dumps(updates).encode()))
+    chats = {c["id"]: c for c in telegram.find_chats("1:A")}
+    assert set(chats) == {"555", "-100999"} and chats["-100999"]["name"] == "NOC team"
+
+    # Through the settings page
+    r = admin.post("/admin/alert-settings", data={"csrf_token": admin.token, "tg_token": "not-a-token",
+                                                  "desktop_min_severity": "warning", "wa_mode": "template"})
+    assert r.status_code == 422 and "BotFather" in r.text
+    r = admin.post("/admin/alert-settings", data={"csrf_token": admin.token, "tg_token": "123:ABC",
+                                                  "telegram_enabled": "on", "tg_group_min_severity": "critical",
+                                                  "desktop_min_severity": "warning", "wa_mode": "template"},
+                   follow_redirects=False)
+    assert r.status_code == 303
+    page = admin.get("/admin/alert-settings/telegram-chats").text
+    assert "NOC team" in page and "-100999" in page and "123:ABC" not in page
+    with SessionLocal() as db:
+        assert app.state.secret_box.decrypt(load_settings(db).tg_token_enc) == "123:ABC"
+    r = admin.post("/admin/alert-settings/test-telegram", data={"csrf_token": admin.token, "chat_id": "555"})
+    assert "Test sent to Telegram chat 555" in r.text
+
+
+def test_user_telegram_fields(app, admin):
+    base = {"csrf_token": admin.token, "username": "t", "role": "viewer", "password": "View12345", "is_active": "on",
+            "telegram_alerts": "on"}
+    assert admin.post("/admin/users/new", data={**base, "telegram_chat_id": ""}).status_code == 422
+    assert admin.post("/admin/users/new", data={**base, "telegram_chat_id": "@ali"}).status_code == 422
+    assert admin.post("/admin/users/new", data={**base, "telegram_chat_id": "555"},
+                      follow_redirects=False).status_code == 303

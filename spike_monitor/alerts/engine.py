@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session, selectinload, sessionmaker
 from ..collectors.common import format_uptime
 from ..models import Alert, Device, DeviceType, NotificationLog, Severity, Status, User, utcnow
 from ..security import SecretBox
-from . import desktop, whatsapp
+from . import desktop, telegram, whatsapp
 from .settings import AlertSettings, load_settings
 
 log = logging.getLogger(__name__)
@@ -263,6 +263,10 @@ class AlertManager:
             recipients = [(u.username, whatsapp.normalize_number(u.phone), u.alert_min_severity,
                            {site.id for site in u.alert_sites}, self.box.decrypt(u.callmebot_key_enc))
                           for u in users if u.phone]
+            tg_users = [(u.username, u.telegram_chat_id.strip(), u.alert_min_severity, {site.id for site in u.alert_sites})
+                        for u in db.scalars(select(User).options(selectinload(User.alert_sites))
+                                            .where(User.is_active, User.telegram_alerts))
+                        if u.telegram_chat_id.strip()]
         logs: list[NotificationLog] = []
 
         if s.desktop_enabled:
@@ -274,6 +278,31 @@ class AlertManager:
                 body = "\n".join(o.text for o in items[:5]) + (f"\n…and {len(items) - 5} more" if len(items) > 5 else "")
                 if await asyncio.to_thread(desktop.show, title, body, critical):
                     logs.append(NotificationLog(channel="desktop", recipient="server PC", message=body))
+
+        def wanted(min_sev: str, site_ids: set) -> list[Outgoing]:
+            return [o for o in outgoing if Severity.RANK.get(o.severity, 0) >= Severity.RANK.get(min_sev, 1)
+                    and (not site_ids or o.site_id in site_ids)]
+
+        def combined(items: list[Outgoing]) -> str:
+            return items[0].text if len(items) == 1 else f"{len(items)} alerts:\n" + "\n".join(o.text for o in items)
+
+        if s.telegram_enabled:
+            token = self.box.decrypt(s.tg_token_enc)
+            targets = [(f"group {s.tg_group_chat_id}", s.tg_group_chat_id.strip(), s.tg_group_min_severity, set())
+                       ] if s.tg_group_chat_id.strip() else []
+            targets += [(name, chat, sev, sites) for name, chat, sev, sites in tg_users]
+            for name, chat_id, min_sev, site_ids in targets:
+                mine = wanted(min_sev, site_ids)
+                if not mine:
+                    continue
+                text = combined(mine)
+                try:
+                    await asyncio.to_thread(telegram.send, token, chat_id, text)
+                    logs.append(NotificationLog(channel="telegram", recipient=name, message=text))
+                except telegram.TelegramError as exc:
+                    log.warning("Telegram to %s failed: %s", name, exc)
+                    logs.append(NotificationLog(channel="telegram", recipient=name, message=text, ok=False,
+                                                error=str(exc)))
 
         if s.whatsapp_enabled and recipients:
             token = self.box.decrypt(s.wa_token_enc)

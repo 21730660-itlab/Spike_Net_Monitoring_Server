@@ -21,6 +21,9 @@ USER_FIELDS = [
     Field("role", "Role", kind="select", required=True, options=choices(Role.ALL), default=Role.VIEWER,
           help="Admin: everything. Technician: manage devices, no passwords or users. Viewer: read only."),
     Field("phone", "WhatsApp number", placeholder="+961 70 123 456", help="International format, with country code."),
+    Field("telegram_alerts", "Send me Telegram alerts", kind="bool", default=False),
+    Field("telegram_chat_id", "Telegram chat ID", placeholder="e.g. 123456789",
+          help="Open your bot in Telegram and press Start, then use 'Find chats' on Alert settings."),
     Field("whatsapp_alerts", "Send me WhatsApp alerts", kind="bool", default=False),
     Field("callmebot_key", "CallMeBot API key", kind="password",
           help="Only for the CallMeBot WhatsApp option. Leave empty to keep the saved key."),
@@ -83,6 +86,10 @@ async def _save(request: Request, db: Session, admin: User, target: User | None)
             stmt = stmt.where(User.id != target.id)
         if db.scalars(stmt).first():
             result.errors["username"] = "This username is taken."
+        if v["telegram_alerts"] and not v["telegram_chat_id"]:
+            result.errors["telegram_chat_id"] = "Enter the Telegram chat ID to send alerts to."
+        elif v["telegram_chat_id"] and not v["telegram_chat_id"].lstrip("-").isdigit():
+            result.errors["telegram_chat_id"] = "A chat ID is a number (groups start with -)."
         if v["whatsapp_alerts"] and not v["phone"]:
             result.errors["phone"] = "Enter the WhatsApp number to send alerts to."
         if target is None and not v["password"]:
@@ -102,7 +109,7 @@ async def _save(request: Request, db: Session, admin: User, target: User | None)
         target = User()
         db.add(target)
     for key in ("username", "full_name", "role", "phone", "must_change_password", "is_active",
-                "whatsapp_alerts", "alert_min_severity"):
+                "whatsapp_alerts", "alert_min_severity", "telegram_alerts", "telegram_chat_id"):
         setattr(target, key, v[key])
     target.alert_sites = [s for s in (db.get(Site, i) for i in v["alert_site_ids"]) if s is not None]
     if v["password"]:

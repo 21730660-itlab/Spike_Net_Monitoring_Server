@@ -16,6 +16,10 @@ There are two ways to get alerts on WhatsApp. Choose one on **Alert settings →
 
 ## Option A: CallMeBot (easiest, alerts to your own number)
 
+> If CallMeBot answers **"this bot is full"**, its WhatsApp number has reached its user limit. That is on
+> CallMeBot's side: check <https://www.callmebot.com/blog/free-api-whatsapp-messages/> for another number,
+> try again later, or use **Telegram** instead (docs/TELEGRAM_SETUP.md), which has no such limit.
+
 Each person who wants alerts does this once on their phone:
 
 1. Add **+34 644 51 95 23** to the phone's contacts (name it "CallMeBot").

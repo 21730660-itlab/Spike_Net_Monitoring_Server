@@ -30,6 +30,12 @@ class AlertSettings:
     desktop_enabled: bool = True
     desktop_min_severity: str = Severity.WARNING
 
+    # Telegram (free, official): a bot token, plus a team group and/or personal chats per user
+    telegram_enabled: bool = False
+    tg_token_enc: str = ""  # encrypted bot token from @BotFather
+    tg_group_chat_id: str = ""  # optional team group: gets every alert at or above tg_group_min_severity
+    tg_group_min_severity: str = Severity.WARNING
+
     # WhatsApp: "callmebot" (free, alerts to personal numbers) or "meta" (official WhatsApp Cloud API)
     whatsapp_enabled: bool = False
     wa_provider: str = "callmebot"

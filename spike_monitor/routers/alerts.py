@@ -10,7 +10,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from ..alerts import desktop, whatsapp
+from ..alerts import desktop, telegram, whatsapp
 from ..alerts.engine import KIND_LABELS
 from ..alerts.settings import AlertSettings, load_settings, save_settings
 from ..db import get_db
@@ -133,15 +133,17 @@ def site_maintenance(site_id: int, request: Request, hours: float = Form(0), db:
 # ------------------------------------------------------------------ settings (admin)
 NUMBER_FIELDS = {"cpu_pct", "temperature_c", "signal_dbm", "broadcast_pps"}
 INT_FIELDS = {"poll_failed_minutes", "warning_delay_minutes", "repeat_minutes"}
-BOOL_FIELDS = {"notify_recovery", "notify_reboot", "desktop_enabled", "whatsapp_enabled"}
-TEXT_FIELDS = {"desktop_min_severity", "wa_provider", "wa_phone_number_id", "wa_mode", "wa_template", "wa_language", "wa_api_version"}
+BOOL_FIELDS = {"notify_recovery", "notify_reboot", "desktop_enabled", "whatsapp_enabled", "telegram_enabled"}
+TEXT_FIELDS = {"desktop_min_severity", "tg_group_chat_id", "tg_group_min_severity", "wa_provider", "wa_phone_number_id", "wa_mode", "wa_template", "wa_language", "wa_api_version"}
 
 
-def _settings_page(request, db, s: AlertSettings, error=None, status=200):
+def _settings_page(request, db, s: AlertSettings, error=None, status=200, chats=None):
     logs = db.scalars(select(NotificationLog).order_by(NotificationLog.ts.desc()).limit(25)).all()
     recipients = db.scalars(select(User).where(User.whatsapp_alerts, User.is_active)).all()
+    tg_recipients = db.scalars(select(User).where(User.telegram_alerts, User.is_active)).all()
     return render(request, "admin/alert_settings.html", {
-        "s": s, "error": error, "logs": logs, "recipients": recipients, "has_token": bool(s.wa_token_enc)},
+        "s": s, "error": error, "logs": logs, "recipients": recipients, "has_token": bool(s.wa_token_enc),
+        "tg_recipients": tg_recipients, "has_tg_token": bool(s.tg_token_enc), "chats": chats},
         status_code=status)
 
 
@@ -167,7 +169,7 @@ async def save(request: Request, db: Session = Depends(get_db), user: User = Dep
     except ValueError:
         return _settings_page(request, db, s, "Numbers only in the threshold and timing fields.", 422)
     if (s.wa_mode not in ("template", "text") or s.desktop_min_severity not in Severity.ALL
-            or s.wa_provider not in ("callmebot", "meta")):
+            or s.wa_provider not in ("callmebot", "meta") or s.tg_group_min_severity not in Severity.ALL):
         return _settings_page(request, db, s, "Invalid choice.", 422)
     s.wa_phone_number_id = s.wa_phone_number_id.replace(" ", "")
     if s.wa_provider == "meta" and (problem := whatsapp.phone_number_id_problem(s.wa_phone_number_id)):
@@ -177,6 +179,14 @@ async def save(request: Request, db: Session = Depends(get_db), user: User = Dep
         s.wa_token_enc = request.app.state.secret_box.encrypt(token)
     if form.get("clear_token") == "on":
         s.wa_token_enc = ""
+    tg_token = str(form.get("tg_token", "")).strip()
+    if tg_token:
+        if ":" not in tg_token:
+            return _settings_page(request, db, s, "That is not a Telegram bot token. It looks like "
+                                  "123456789:AAH... and comes from @BotFather.", 422)
+        s.tg_token_enc = request.app.state.secret_box.encrypt(tg_token)
+    if form.get("clear_tg_token") == "on":
+        s.tg_token_enc = ""
     save_settings(db, s)
     audit(db, request, user.username, "alert_settings.update")
     db.commit()
@@ -210,6 +220,33 @@ async def test_whatsapp(request: Request, phone: str = Form(""), apikey: str = F
         flash(request, f"Test sent to +{number} ({result}). Check the phone.")
     except whatsapp.WhatsAppError as exc:
         db.add(NotificationLog(channel="whatsapp", recipient=number, message=text, ok=False, error=str(exc)))
+        flash(request, str(exc), "error")
+    db.commit()
+    return RedirectResponse("/admin/alert-settings", status_code=303)
+
+
+@router.get("/admin/alert-settings/telegram-chats")
+async def telegram_chats(request: Request, db: Session = Depends(get_db), user: User = Depends(require_admin)):
+    s = load_settings(db)
+    try:
+        chats = await asyncio.to_thread(telegram.find_chats, request.app.state.secret_box.decrypt(s.tg_token_enc))
+    except telegram.TelegramError as exc:
+        return _settings_page(request, db, s, str(exc), 200)
+    return _settings_page(request, db, s, chats=chats)
+
+
+@router.post("/admin/alert-settings/test-telegram", dependencies=[Depends(verify_csrf)])
+async def test_telegram(request: Request, chat_id: str = Form(""), db: Session = Depends(get_db),
+                        user: User = Depends(require_admin)):
+    s = load_settings(db)
+    chat_id = chat_id.strip() or user.telegram_chat_id or s.tg_group_chat_id
+    text = f"✅ Test message from Spike Net Monitor, sent by {user.username}."
+    try:
+        await asyncio.to_thread(telegram.send, request.app.state.secret_box.decrypt(s.tg_token_enc), chat_id, text)
+        db.add(NotificationLog(channel="telegram", recipient=chat_id, message=text))
+        flash(request, f"Test sent to Telegram chat {chat_id}. Check Telegram.")
+    except telegram.TelegramError as exc:
+        db.add(NotificationLog(channel="telegram", recipient=chat_id, message=text, ok=False, error=str(exc)))
         flash(request, str(exc), "error")
     db.commit()
     return RedirectResponse("/admin/alert-settings", status_code=303)
