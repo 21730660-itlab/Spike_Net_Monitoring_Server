@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Network map · Spike Net Monitor{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">{% endblock %}
+{% block heading %}Network map{% endblock %}
+{% block content %}
+<div class="panel">
+  <div class="topbar" style="margin-bottom:10px">
+    <div class="actions" role="tablist">
+      <button class="btn tab primary" data-view="sites">🏢 Sites</button>
+      <button class="btn tab" data-view="devices">📡 Devices</button>
+      <button class="btn tab" data-view="geo">🗺️ Geographic</button>
+      <select id="site-filter" style="width:auto;display:none"><option value="">All sites</option></select>
+    </div>
+    <div class="actions">
+      {% if can_edit %}<button class="btn small" id="save-layout" style="display:none">💾 Save layout</button>{% endif %}
+      <button class="btn small" id="auto-layout">↻ Auto arrange</button>
+    </div>
+  </div>
+  <div class="legend">
+    <span><i class="dot up"></i>Up</span><span><i class="dot warning"></i>Degraded</span><span><i class="dot down"></i>Down</span>
+    <span><i class="dot unreachable"></i>Unreachable (parent down)</span><span><i class="dot unknown"></i>Unknown / paused</span>
+    <span class="muted" id="map-hint">Double-click a site to see its devices. Drag to arrange{% if can_edit %}, then Save layout{% endif %}.</span>
+  </div>
+  <div id="topology" class="map-canvas"></div>
+  <div id="geo" class="map-canvas" style="display:none"></div>
+  <div id="geo-missing" class="muted" style="display:none;margin-top:10px"></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/vendor/vis-network.min.js"></script>
+<script src="/static/vendor/leaflet/leaflet.js"></script>
+<script>window.SPIKE_CAN_EDIT = {{ "true" if can_edit else "false" }}; window.SPIKE_CSRF = "{{ csrf_token(request) }}";</script>
+<script src="/static/map.js"></script>
+{% endblock %}

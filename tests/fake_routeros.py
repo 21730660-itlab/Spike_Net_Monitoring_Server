@@ -85,8 +85,11 @@ class FakeRouterOS:
                 if not logged_in:
                     self._trap(proto, "not logged in")
                     continue
-                if cmd not in self.data:
-                    self._trap(proto, "no such command prefix")
+                if cmd not in self.data:  # real RouterOS answers a missing menu with two traps
+                    menu = cmd.rstrip("/").split("/")[-2]
+                    proto.writeSentence("!trap", f"=message=no such command or directory ({menu})")
+                    proto.writeSentence("!trap", "=message=no such command prefix")
+                    proto.writeSentence("!done")
                     continue
                 for row in self.data[cmd]:
                     proto.writeSentence("!re", *(f"={k}={v}" for k, v in row.items()))

@@ -106,6 +106,9 @@ class Site(Base):
     latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     notes: Mapped[str] = mapped_column(Text, default="")
+    # Position on the topology map (saved when someone arranges the map)
+    map_x: Mapped[float | None] = mapped_column(Float, nullable=True)
+    map_y: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     devices: Mapped[list[Device]] = relationship(back_populates="site")
 
@@ -222,6 +225,8 @@ class Device(Base):
     poll_error: Mapped[str] = mapped_column(Text, default="")
     # SSH host key fingerprint, remembered on first connect (trust on first use)
     ssh_host_key: Mapped[str] = mapped_column(String(128), default="")
+    map_x: Mapped[float | None] = mapped_column(Float, nullable=True)
+    map_y: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 

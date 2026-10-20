@@ -56,6 +56,16 @@ def test_mikrotik_v7_and_legacy_v6():
     assert collect(ApiTarget("127.0.0.1", "admin", "secret", port=legacy.port, timeout=3)).identity == "Core-RB4011"
 
 
+def test_mikrotik_board_without_health_menu():
+    """Small boards (e.g. SXTsq on RouterOS v6) have no /system/health or /system/routerboard."""
+    data = {k: v for k, v in FakeRouterOS().data.items()
+            if not k.startswith(("/system/health", "/system/routerboard"))}
+    srv = FakeRouterOS(data=data)
+    stats = collect(ApiTarget("127.0.0.1", "admin", "secret", port=srv.port, timeout=3))
+    assert stats.identity == "Core-RB4011" and stats.cpu_pct == 12
+    assert stats.temperature is None and stats.voltage is None
+
+
 def test_mikrotik_errors():
     srv = FakeRouterOS()
     with pytest.raises(CollectorError, match="wrong username or password"):

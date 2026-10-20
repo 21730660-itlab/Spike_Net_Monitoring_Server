@@ -20,6 +20,8 @@ See [docs/DESIGN.md](docs/DESIGN.md) for the full requirements and the phase pla
 - Discovered devices: neighbors your MikroTiks see that are not in the app yet
 - Push settings (admin): run commands on one or many devices over SSH, with preview and per-device results
 - Traffic / health graphs up to 1 year
+- Network map: sites and their links, every device and its uplink, and a geographic map of your towers
+  (the street map background needs internet on the PC viewing it)
 
 ## Preparing your devices
 

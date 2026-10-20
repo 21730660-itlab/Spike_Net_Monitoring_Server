@@ -55,6 +55,10 @@ Windows PC 24/7; the team uses it from a browser on any PC or phone.
   for a year (raw samples 7 days), graph ranges up to 1 year.
 - Wireless clients matched to the Customers list by MAC.
 - Upstream ISP panel on the dashboard (devices of type "Upstream").
+- **Network map** (added on request): Sites view (sites and the links between them, coloured by the
+  worst status inside, wireless signal on the link), Devices view (every device and its uplink,
+  filter by site), Geographic view (sites on a street map with link lines, drag pins / place sites).
+  Layout can be arranged and saved; refreshes every 20 s.
 
 ### Phase 3: alerts
 - Alert rules: down/up, latency, loss, weak signal, high CPU/temperature, loop detected.
@@ -69,7 +73,7 @@ Windows PC 24/7; the team uses it from a browser on any PC or phone.
 - Encrypted export/import of the whole inventory **including passwords** (password-protected file),
   plus a plain CSV export without passwords.
 - IP / subnet calculator (CIDR, masks, ranges, VLSM).
-- Network map (tree), ping/traceroute tool.
+- Ping/traceroute tool.
 - **Open in Winbox / SSH / web** buttons via a small helper installed on each technician PC
   (`winbox://` link handler that starts `winbox.exe` already logged in).
 - Run as a Windows service; installer.

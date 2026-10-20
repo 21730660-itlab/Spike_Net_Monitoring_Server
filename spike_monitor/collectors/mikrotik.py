@@ -49,7 +49,7 @@ def _ssl_wrapper() -> Callable:
 def connect(target: ApiTarget):
     """Log in, trying the modern method first and the pre-6.43 method second."""
     import librouteros
-    from librouteros.exceptions import LibRouterosError, TrapError
+    from librouteros.exceptions import LibRouterosError, MultiTrapError, TrapError
     from librouteros.login import plain, token
 
     if not target.username:
@@ -85,19 +85,23 @@ def connect(target: ApiTarget):
         try:
             tuple(api.path("system", "identity"))
             return api
-        except TrapError as exc:  # plain login on RouterOS < 6.43 is silently ignored
+        except (TrapError, MultiTrapError) as exc:  # plain login on RouterOS < 6.43 is silently ignored
             last_error = exc
             api.close()
     raise CollectorError(f"API connection failed: {last_error}")
 
 
 def _rows(api, *path: str) -> list[dict]:
-    """Read a menu; menus missing on this RouterOS version/package return []."""
-    from librouteros.exceptions import TrapError
+    """Read a menu; menus missing on this board / RouterOS version / package return [].
+
+    RouterOS reports a missing menu with two traps ("no such command or directory"
+    and "no such command prefix"), which librouteros raises as MultiTrapError.
+    """
+    from librouteros.exceptions import MultiTrapError, TrapError
 
     try:
         return [dict(r) for r in api.path(*path)]
-    except TrapError:
+    except (TrapError, MultiTrapError):
         return []
 
 

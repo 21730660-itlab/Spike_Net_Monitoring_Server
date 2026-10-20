@@ -15,6 +15,7 @@
     <nav>
       <a href="/" class="{{ 'active' if path == '/' }}">Dashboard</a>
       <a href="/devices" class="{{ 'active' if path.startswith('/devices') }}">Devices</a>
+      <a href="/map" class="{{ 'active' if path.startswith('/map') }}">Network map</a>
       <a href="/discovery" class="{{ 'active' if path.startswith('/discovery') }}">Discovered</a>
       {% if user and user.role == Role.ADMIN %}<a href="/commands" class="{{ 'active' if path.startswith('/commands') }}">Push settings</a>{% endif %}
       <div class="section">Inventory</div>
