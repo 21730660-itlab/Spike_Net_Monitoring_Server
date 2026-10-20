@@ -10,6 +10,17 @@
       {% set attrs = option_attrs.get(f.name, {}) if option_attrs is defined else {} %}
       {% for k, v in options[f.name] %}<option value="{{ k }}" {{ 'selected' if val is not none and k == val|string }}{% for ak, av in attrs.get(k, {}).items() %} data-{{ ak }}="{{ av }}"{% endfor %}>{{ v }}</option>{% endfor %}
     </select>
+  {% elif f.kind == "port_select" %}
+    {% set attrs = option_attrs.get(f.name, {}) if option_attrs is defined else {} %}
+    {% set names = options[f.name]|map(attribute=0)|list %}
+    {% set other = val and val not in names %}
+    <select id="f_{{ f.name }}" name="{{ f.name }}" data-port-select>
+      <option value="">— not set —</option>
+      {% for k, v in options[f.name] %}<option value="{{ k }}" {{ 'selected' if k == val }}{% for ak, av in attrs.get(k, {}).items() %} data-{{ ak }}="{{ av }}"{% endfor %}>{{ v }}</option>{% endfor %}
+      <option value="__other__" {{ 'selected' if other }}>Other (type it)…</option>
+    </select>
+    <input type="text" id="f_{{ f.name }}_other" name="{{ f.name }}_other" value="{{ val if other else '' }}" placeholder="{{ f.placeholder }}"
+           style="margin-top:6px{{ '' if other else ';display:none' }}">
   {% elif f.kind == "combo" %}
     <input type="text" id="f_{{ f.name }}" name="{{ f.name }}" value="{{ val or '' }}" placeholder="{{ f.placeholder }}" list="dl_{{ f.name }}" autocomplete="off">
     <datalist id="dl_{{ f.name }}">{% for s in f.suggestions %}<option value="{{ s }}">{% endfor %}</datalist>

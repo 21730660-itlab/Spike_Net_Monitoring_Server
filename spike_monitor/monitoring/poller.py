@@ -14,7 +14,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from ..collectors import mikrotik, ubiquiti
-from ..collectors.common import CollectorError, DeviceStats, Inventory
+from ..collectors.common import CollectorError, DeviceStats, Inventory, interface_kind
 from ..collectors.mikrotik import ApiTarget
 from ..collectors.ssh import SshTarget
 from ..models import (
@@ -127,6 +127,7 @@ def store_stats(db: Session, device: Device, stats: DeviceStats, now: datetime) 
             mc = _rate(st.rx_multicast, row.rx_multicast, seconds)
             row.bcast_pps = None if bc is None else (bc + (mc or 0)) / 8  # _rate returns bits; these are packets
         row.rx_broadcast, row.rx_multicast = st.rx_broadcast, st.rx_multicast
+        row.ip_addresses, row.link_speed = st.ip_addresses[:255], st.link_speed[:32]
         row.rx_bytes, row.tx_bytes = st.rx_bytes, st.tx_bytes
         row.rx_bps, row.tx_bps = rx_bps, tx_bps
         row.updated_at = now
@@ -178,8 +179,12 @@ def detect_uplinks(db: Session, device: Device) -> None:
     peers = {p.mac_address: p for p in device.wireless_peers}
     neighbors = db.scalars(select(Neighbor).where(Neighbor.seen_by_id == device.id)).all()
 
-    def link_type(port: str, via_radio: bool) -> str:
-        return "wireless" if via_radio or if_types.get(port, "") in WIRELESS_IF_TYPES else "wired"
+    def link_type(port: str, via_radio: bool, other: Device | None = None) -> str:
+        if via_radio or if_types.get(port, "") in WIRELESS_IF_TYPES:
+            return "wireless"
+        if other is not None and other.site_id and device.site_id and other.site_id != device.site_id:
+            return "wireless"  # different sites are never cabled together
+        return "fiber" if interface_kind(port, if_types.get(port, "")) == "fiber" else "wired"
 
     for child in db.scalars(select(Device).where(Device.parent_id == device.id, Device.uplink_auto)):
         macs = _macs(child)
@@ -190,7 +195,7 @@ def detect_uplinks(db: Session, device: Device) -> None:
         n = next((n for n in neighbors if (n.ip_address and n.ip_address == child.ip_address)
                   or (n.mac_address and n.mac_address in macs)), None)
         if n is not None and n.interface:
-            child.uplink_port, child.uplink_type = n.interface, link_type(n.interface, False)
+            child.uplink_port, child.uplink_type = n.interface, link_type(n.interface, False, child)
 
     parent = device.parent
     if parent is not None and device.uplink_auto:
@@ -205,7 +210,7 @@ def detect_uplinks(db: Session, device: Device) -> None:
             if n is not None and n.interface:
                 device.local_port = n.interface
                 if not device.uplink_type:
-                    device.uplink_type = link_type(n.interface, False)
+                    device.uplink_type = link_type(n.interface, False, parent)
 
 
 class StatsPoller:

@@ -81,10 +81,11 @@
 
 <div class="panel"><h2>Interfaces</h2>
   <div class="table-wrap"><table>
-    <thead><tr><th>Name</th><th>Type</th><th>State</th><th>Download (rx)</th><th>Upload (tx)</th><th>MAC</th><th>Comment</th></tr></thead>
+    <thead><tr><th>Name</th><th>Type</th><th>State</th><th>Speed</th><th>IP address</th><th>Download (rx)</th><th>Upload (tx)</th><th>MAC</th><th>Comment</th></tr></thead>
     <tbody>{% for i in device.interfaces %}
       <tr><td>{{ i.name }}</td><td>{{ i.if_type }}</td>
         <td>{% if i.disabled %}<span class="pill paused">Disabled</span>{% elif i.running %}<span class="pill up">Running</span>{% else %}<span class="pill down">Not running</span>{% endif %}</td>
+        <td>{{ i.link_speed }}</td><td>{{ i.ip_addresses }}</td>
         <td>{{ i.rx_bps|bps }}</td><td>{{ i.tx_bps|bps }}</td><td class="muted">{{ i.mac_address }}</td><td class="muted">{{ i.comment }}</td></tr>
     {% endfor %}</tbody>
   </table></div>
@@ -117,7 +118,9 @@
         {% if device.uplink_type or device.uplink_port or device.local_port %}<br><span class="muted">
           {{ {"wired": "🔌 Wired", "wireless": "📶 Wireless", "fiber": "💡 Fiber"}.get(device.uplink_type, "Connection") }}:
           {{ device.parent.name }}{% if device.uplink_port %} <b>{{ device.uplink_port }}</b>{% endif %} → this device{% if device.local_port %} <b>{{ device.local_port }}</b>{% endif %}
-          {% if device.uplink_auto %}(detected){% endif %}</span>
+          {% if device.uplink_auto %}(detected){% endif %}
+          {% set li = device.link_info() %}{% if li.speed %}<br>⚡ Speed: {{ li.speed }}{% endif %}
+          {% if li.parent_ip %}<br>Parent port IP: {{ li.parent_ip }}{% endif %}{% if li.local_ip %}<br>This port IP: {{ li.local_ip }}{% endif %}</span>
         {% else %}<br><span class="muted">Connection type and ports not known yet{% if user.has_role(Role.TECHNICIAN) %} (<a href="/devices/{{ device.id }}/edit">set them</a>){% endif %}</span>{% endif %}
         {% else %}—{% endif %}</dd>
       <dt>Connected devices</dt><dd>{% for c in device.children %}<a href="/devices/{{ c.id }}">{{ c.name }}</a>{% if c.uplink_port or c.uplink_type %} <span class="muted">({{ c.uplink_port }}{{ " · " if c.uplink_port and c.uplink_type }}{{ c.uplink_type }})</span>{% endif %}{{ ", " if not loop.last }}{% else %}—{% endfor %}</dd>

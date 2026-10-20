@@ -1,0 +1,35 @@
+{# Ticked rows are created as devices or customers. Needs: nb_rows = [{name, ip, mac, platform, board, version,
+   interface, parent_id, parent_name}], inside a <form> that posts to a handler calling import_neighbors(). #}
+<div class="actions" style="margin-bottom:8px">
+  <button type="button" class="btn small" data-nb-all>Select all</button>
+  <button type="button" class="btn small" data-nb-none>Select none</button>
+  <span class="muted">Without an IP a neighbor can only be imported as a <b>customer</b> (name + MAC, linked to the device that sees it), unless you type its IP.</span>
+</div>
+<div class="table-wrap"><table>
+  <thead><tr><th>Import</th><th>As</th><th>Name</th><th>IP</th><th>MAC</th><th>Board</th><th>Seen by (port)</th></tr></thead>
+  <tbody>
+  {% for r in nb_rows %}{% set i = loop.index %}
+    <tr>
+      <td><input type="checkbox" name="nb_{{ i }}_sel" value="1" data-nb-sel></td>
+      <td><select name="nb_{{ i }}_as" style="width:auto">
+        <option value="device" {{ 'selected' if r.ip }}>Device</option>
+        <option value="customer" {{ 'selected' if not r.ip }}>Customer</option></select></td>
+      <td><input type="text" name="nb_{{ i }}_name" value="{{ r.name }}" style="min-width:150px"></td>
+      <td><input type="text" name="nb_{{ i }}_ip" value="{{ r.ip }}" placeholder="none" style="width:130px"></td>
+      <td>{{ r.mac }}<input type="hidden" name="nb_{{ i }}_mac" value="{{ r.mac }}"></td>
+      <td>{{ r.platform }} {{ r.board }}{% if r.version %} <span class="muted">{{ r.version }}</span>{% endif %}
+        <input type="hidden" name="nb_{{ i }}_board" value="{{ r.board }}"><input type="hidden" name="nb_{{ i }}_platform" value="{{ r.platform }}">
+        <input type="hidden" name="nb_{{ i }}_version" value="{{ r.version }}"></td>
+      <td>{{ r.parent_name }}{% if r.interface %} <span class="muted">({{ r.interface }})</span>{% endif %}
+        <input type="hidden" name="nb_{{ i }}_parent" value="{{ r.parent_id }}"><input type="hidden" name="nb_{{ i }}_interface" value="{{ r.interface }}"></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+<script>
+(() => {
+  const boxes = () => document.querySelectorAll("[data-nb-sel]");
+  document.querySelectorAll("[data-nb-all]").forEach((b) => b.addEventListener("click", () => boxes().forEach((c) => { c.checked = true; })));
+  document.querySelectorAll("[data-nb-none]").forEach((b) => b.addEventListener("click", () => boxes().forEach((c) => { c.checked = false; })));
+})();
+</script>

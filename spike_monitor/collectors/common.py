@@ -21,6 +21,8 @@ class InterfaceStat:
     tx_bytes: int | None = None
     rx_broadcast: int | None = None  # ethernet only; used for broadcast storm / loop detection
     rx_multicast: int | None = None
+    ip_addresses: str = ""  # e.g. "10.0.0.1/24, 10.1.0.1/30"
+    link_speed: str = ""  # negotiated ethernet rate, e.g. "1Gbps"; blank when unknown
 
 
 @dataclass
@@ -98,6 +100,23 @@ class Inventory:
     bridges: list[str] = field(default_factory=list)
     wireless: list[dict] = field(default_factory=list)  # {name, ssid, frequency, mode, band}
     neighbors: list[NeighborStat] = field(default_factory=list)
+
+
+WIRELESS_TYPES = ("wlan", "wifi", "wifiwave2", "wireless", "w60g", "60g", "ath")
+WIRELESS_PREFIXES = ("wlan", "wifi", "ath", "w60g", "wl")
+WIRED_PREFIXES = ("ether", "eth", "sfp", "combo", "lan", "qsfp")
+
+
+def interface_kind(name: str, if_type: str = "") -> str:
+    """'wireless', 'fiber', 'wired' or '' (logical interfaces such as bridge, vlan, pppoe, wg)."""
+    n, t = (name or "").lower(), (if_type or "").lower()
+    if t in WIRELESS_TYPES or n.startswith(WIRELESS_PREFIXES):
+        return "wireless"
+    if n.startswith(("sfp", "qsfp")):
+        return "fiber"
+    if t == "ether" or n.startswith(WIRED_PREFIXES):
+        return "wired"
+    return ""
 
 
 def to_float(value) -> float | None:

@@ -291,6 +291,28 @@ class Device(Base):
             return self.credential_profile.username, box.decrypt(self.credential_profile.password_enc)
         return "", ""
 
+    def link_info(self) -> dict:
+        """Speed and IP addresses of the link to the parent, where known (blank otherwise)."""
+        info = {"speed": "", "parent_ip": "", "local_ip": ""}
+        parent = self.parent
+        if parent is None:
+            return info
+        p_if = next((i for i in parent.interfaces if i.name == self.uplink_port), None)
+        l_if = next((i for i in self.interfaces if i.name == self.local_port), None)
+        info["parent_ip"] = p_if.ip_addresses if p_if else ""
+        info["local_ip"] = l_if.ip_addresses if l_if else ""
+        if self.uplink_type == "wireless":
+            macs = {i.mac_address for i in self.interfaces if i.mac_address} | ({self.mac_address} - {""})
+            peer = next((p for p in parent.wireless_peers if p.mac_address in macs), None)
+            if peer is None:  # the child may be the AP side and see its parent as a client
+                pmacs = {i.mac_address for i in parent.interfaces if i.mac_address} | ({parent.mac_address} - {""})
+                peer = next((p for p in self.wireless_peers if p.mac_address in pmacs), None)
+            if peer is not None and (peer.tx_rate or peer.rx_rate):
+                info["speed"] = " / ".join(x for x in (peer.tx_rate, peer.rx_rate) if x)
+        else:
+            info["speed"] = (p_if.link_speed if p_if else "") or (l_if.link_speed if l_if else "")
+        return info
+
     def in_maintenance(self, now: datetime) -> bool:
         if self.maintenance_until and self.maintenance_until > now:
             return True
@@ -400,6 +422,8 @@ class DeviceInterface(Base):
     rx_broadcast: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     rx_multicast: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     bcast_pps: Mapped[float | None] = mapped_column(Float, nullable=True)  # broadcast+multicast packets/s
+    ip_addresses: Mapped[str] = mapped_column(String(255), default="")
+    link_speed: Mapped[str] = mapped_column(String(32), default="")  # e.g. "1Gbps"; blank when unknown
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 

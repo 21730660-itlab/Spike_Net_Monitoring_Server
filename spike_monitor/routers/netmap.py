@@ -28,7 +28,11 @@ def worst(statuses) -> str:
 
 def build_map(db: Session) -> dict:
     sites = db.scalars(select(Site).order_by(Site.name)).all()
-    devices = db.scalars(select(Device).options(selectinload(Device.parent))).all()
+    devices = db.scalars(select(Device).options(
+        selectinload(Device.parent).selectinload(Device.interfaces),
+        selectinload(Device.parent).selectinload(Device.wireless_peers),
+        selectinload(Device.interfaces), selectinload(Device.wireless_peers))).all()
+    infos = {d.id: d.link_info() for d in devices}
     by_site: dict[int | None, list[Device]] = defaultdict(list)
     for d in devices:
         by_site[d.site_id].append(d)
@@ -72,7 +76,7 @@ def build_map(db: Session) -> dict:
             "signal": min((d.signal_dbm for d in items if d.signal_dbm is not None), default=None),
             "type": link_kind(items),
             "links": [{"parent": d.parent.name, "child": d.name, "type": d.uplink_type,
-                       "parent_port": d.uplink_port, "child_port": d.local_port} for d in items],
+                       "parent_port": d.uplink_port, "child_port": d.local_port, **infos[d.id]} for d in items],
         }
         for (a, b), items in links.items()
     ]
@@ -84,6 +88,7 @@ def build_map(db: Session) -> dict:
             "latency": d.last_latency_ms, "signal": d.signal_dbm, "clients": d.wireless_clients,
             "uplink_type": d.uplink_type, "uplink_port": d.uplink_port, "local_port": d.local_port,
             "parent_name": d.parent.name if d.parent else "",
+            "speed": infos[d.id]["speed"], "parent_ip": infos[d.id]["parent_ip"], "local_ip": infos[d.id]["local_ip"],
         }
         for d in devices
     ]
@@ -102,8 +107,15 @@ def map_data(db: Session = Depends(get_db), user: User = Depends(require_viewer)
 
 @router.get("/api/devices/{device_id}/interfaces")
 def device_interfaces(device_id: int, db: Session = Depends(get_db), user: User = Depends(require_viewer)):
+    """Interfaces for the port lists: [{name, label, kind, ip, speed}] plus the device's site."""
+    from .inventory import port_options
+
     device = db.get(Device, device_id)
-    return [i.name for i in device.interfaces] if device else []
+    if device is None:
+        return {"site_id": None, "interfaces": []}
+    opts, attrs = port_options(device.interfaces)
+    return {"site_id": device.site_id,
+            "interfaces": [{"name": n, "label": label, **attrs[n]} for n, label in opts]}
 
 
 @router.post("/api/map/layout", dependencies=[Depends(verify_csrf)])

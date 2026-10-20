@@ -22,12 +22,15 @@
   function linkText(d) {
     const ports = [d.uplink_port, d.local_port].filter(Boolean).join(" → ");
     const sig = d.signal != null && d.uplink_type === "wireless" ? `${Math.round(d.signal)} dBm` : "";
-    return [ports, sig].filter(Boolean).join(" · ");
+    return [ports, d.speed, sig].filter(Boolean).join(" · ");
   }
 
   function linkTitle(d) {
     const lines = [`${TYPE_LABEL[d.uplink_type] || "Connection type not set"} link`];
     lines.push(`${d.parent_name}${d.uplink_port ? ` (${d.uplink_port})` : ""} → ${d.name}${d.local_port ? ` (${d.local_port})` : ""}`);
+    if (d.speed) lines.push(`Speed: ${d.speed}`);
+    if (d.parent_ip) lines.push(`${d.parent_name} port IP: ${d.parent_ip}`);
+    if (d.local_ip) lines.push(`${d.name} port IP: ${d.local_ip}`);
     if (d.signal != null && d.uplink_type === "wireless") lines.push(`Signal: ${Math.round(d.signal)} dBm`);
     lines.push(`Status: ${label(d.status)}`);
     return lines.join("\n");
@@ -90,7 +93,7 @@
           color: { color: STATUS_COLOR[l.status] || STATUS_COLOR.unknown }, dashes: linkStyle(l.type),
           label: [TYPE_LABEL[l.type], ports, sig].filter(Boolean).join(" · "),
           font: { color: TEXT, strokeWidth: 3, strokeColor: C("--bg"), size: 12 },
-          title: l.links.map((k) => `${TYPE_LABEL[k.type] || "?"}: ${k.parent}${k.parent_port ? ` (${k.parent_port})` : ""} → ${k.child}${k.child_port ? ` (${k.child_port})` : ""}`).join("\n"),
+          title: l.links.map((k) => `${TYPE_LABEL[k.type] || "?"}: ${k.parent}${k.parent_port ? ` (${k.parent_port})` : ""} → ${k.child}${k.child_port ? ` (${k.child_port})` : ""}${k.speed ? ` · ${k.speed}` : ""}`).join("\n"),
         });
       });
       const upstreamSites = data.sites.filter((s) => s.upstream);

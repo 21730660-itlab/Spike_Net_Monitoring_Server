@@ -4,13 +4,18 @@
 <div class="panel">
   <div style="float:right">{% with kind="neighbors", what="the discovered devices list (it fills again on the next poll)", device_id=None, button="Clear list" %}{% include "generic/_clear.html" %}{% endwith %}</div>
   <p class="muted">Devices that your MikroTiks can see as neighbors (MNDP / CDP / LLDP) but that are not in the inventory yet. Refreshed every poll.</p>
+  {% if not nb_rows %}<p class="muted">Nothing new found. Neighbors appear here after MikroTik devices with API access have been read.</p>
+  {% elif can_import %}
+  <form method="post" action="/discovery/import">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+    {% include "generic/_neighbors_import.html" %}
+    <div class="actions" style="margin-top:12px"><button class="btn primary">Import selected</button></div>
+  </form>
+  {% else %}
   <div class="table-wrap"><table>
-    <thead><tr><th>Identity</th><th>IP</th><th>MAC</th><th>Platform / board</th><th>Version</th><th>Seen by</th><th></th></tr></thead>
-    <tbody>{% for item in items %}{% set n = item.n %}
-      <tr><td>{{ n.identity or "—" }}</td><td>{{ n.ip_address or "—" }}</td><td>{{ n.mac_address }}</td><td>{{ n.platform }} {{ n.board }}</td><td>{{ n.version }}</td>
-        <td>{% for d in item.seen_by %}<a href="/devices/{{ d.id }}">{{ d.name }}</a> <span class="muted">({{ n.interface }})</span>{{ ", " if not loop.last }}{% endfor %}</td>
-        <td>{% if user.has_role(Role.TECHNICIAN) and n.ip_address %}<a class="btn small primary" href="{{ item.add_url }}">Add as device</a>{% endif %}</td></tr>
-    {% else %}<tr><td colspan="7" class="muted">Nothing new found. Neighbors appear here after MikroTik devices with API access have been read.</td></tr>{% endfor %}</tbody>
+    <thead><tr><th>Identity</th><th>IP</th><th>MAC</th><th>Board</th><th>Seen by</th></tr></thead>
+    <tbody>{% for r in nb_rows %}<tr><td>{{ r.name }}</td><td>{{ r.ip }}</td><td>{{ r.mac }}</td><td>{{ r.platform }} {{ r.board }}</td><td>{{ r.parent_name }}</td></tr>{% endfor %}</tbody>
   </table></div>
+  {% endif %}
 </div>
 {% endblock %}

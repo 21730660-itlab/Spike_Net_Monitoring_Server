@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..crud import Crud
+from ..collectors.common import interface_kind
 from ..forms import Field, choices
 from ..models import (
     DEFAULT_PORTS,
@@ -293,27 +294,56 @@ DEVICE_FIELDS_REST = [
 ]
 
 
-COMMON_PORTS = ["ether1", "ether2", "ether3", "ether4", "ether5", "sfp1", "sfp-sfpplus1", "combo1",
-                "wlan1", "wlan2", "wifi1", "wifi2", "bridge", "eth0", "ath0", "br0"]
 UPLINK_FIELDS = ("uplink_type", "uplink_port", "local_port")
+
+
+def port_label(i) -> str:
+    extra = " · ".join(x for x in (i.if_type, i.link_speed, i.ip_addresses) if x)
+    return f"{i.name} ({extra})" if extra else i.name
+
+
+def port_options(interfaces) -> tuple[list[tuple[str, str]], dict[str, dict[str, str]]]:
+    """Physical interfaces first; logical ones (bridge, vlan, pppoe, wg) after."""
+    ordered = sorted(interfaces, key=lambda i: (interface_kind(i.name, i.if_type) == "", i.name))
+    opts = [(i.name, port_label(i)) for i in ordered]
+    attrs = {i.name: {"kind": interface_kind(i.name, i.if_type) or "other", "ip": i.ip_addresses,
+                      "speed": i.link_speed} for i in ordered}
+    return opts, attrs
+
+
+def device_info(db: Session) -> dict[str, dict[str, str]]:
+    return {str(d.id): {"site": str(d.site_id or "")} for d in db.scalars(select(Device))}
 
 
 def _device_extra_fields(db: Session, obj: Device | None) -> list[Field]:
     parent = Field("parent_id", "Parent device (uplink)", kind="select", options=_parent_options_for(obj),
-                   group="Connection", help="The device this one connects through. Used for the map and smart alerts.")
-    own_ports = [i.name for i in obj.interfaces] if obj else []
-    parent_ports = [i.name for i in obj.parent.interfaces] if obj and obj.parent else []
+                   option_attrs=device_info, group="Connection",
+                   help="The device this one connects through. Used for the map and smart alerts.")
+    p_opts, p_attrs = port_options(obj.parent.interfaces if obj and obj.parent else [])
+    l_opts, l_attrs = port_options(obj.interfaces if obj else [])
     connection = [
         Field("uplink_type", "Connected by", kind="select", group="Connection",
               options=[(LinkType.WIRED, "Wired (cable)"), (LinkType.WIRELESS, "Wireless"), (LinkType.FIBER, "Fiber")],
-              help="Leave empty to detect it automatically from the parent MikroTik."),
-        Field("uplink_port", "Parent's port / interface", kind="combo", group="Connection",
-              placeholder="e.g. ether3 or wlan1", suggestions=parent_ports or COMMON_PORTS,
-              help="Where the cable or radio link plugs into the parent."),
-        Field("local_port", "This device's port / interface", kind="combo", group="Connection",
-              placeholder="e.g. ether1", suggestions=own_ports or COMMON_PORTS),
+              help="Devices in different sites can only be connected wireless. Leave empty to detect it."),
+        Field("uplink_port", "Parent's port / interface", kind="port_select", group="Connection",
+              options=p_opts, option_attrs=lambda _db: p_attrs, placeholder="e.g. ether3 or wlan1",
+              help="The list shows the parent's interfaces of the chosen type (read from the device)."),
+        Field("local_port", "This device's port / interface", kind="port_select", group="Connection",
+              options=l_opts, option_attrs=lambda _db: l_attrs, placeholder="e.g. ether1"),
     ]
     return [parent] + connection + DEVICE_FIELDS_REST
+
+
+def _port_kind_error(interfaces, port: str, link: str) -> str | None:
+    iface = next((i for i in interfaces if i.name == port), None)
+    if iface is None or not link:
+        return None
+    kind = interface_kind(iface.name, iface.if_type)
+    if link == LinkType.WIRELESS and kind in ("wired", "fiber"):
+        return f"{port} is a {kind} port, but the connection is wireless."
+    if link in (LinkType.WIRED, LinkType.FIBER) and kind == "wireless":
+        return f"{port} is a wireless interface, but the connection is {link}."
+    return None
 
 
 def _validate_device(db: Session, values: dict, obj: Device | None) -> dict[str, str]:
@@ -325,11 +355,24 @@ def _validate_device(db: Session, values: dict, obj: Device | None) -> dict[str,
     if not _fk_exists(db, PortProfile, values.get("port_profile_id")):
         errors["port_profile_id"] = "Unknown profile."
     parent_id = values.get("parent_id")
+    parent = db.get(Device, parent_id) if parent_id is not None else None
     if parent_id is not None:
-        if db.get(Device, parent_id) is None:
+        if parent is None:
             errors["parent_id"] = "Unknown device."
         elif obj is not None and (parent_id == obj.id or parent_id in _descendant_ids(obj)):
             errors["parent_id"] = "A device cannot be connected through itself or its own children."
+    link = values.get("uplink_type") or ""
+    if parent is not None:
+        site_id = values.get("site_id")
+        if site_id and parent.site_id and site_id != parent.site_id and link in (LinkType.WIRED, LinkType.FIBER):
+            errors["uplink_type"] = "Devices in different sites can only be connected wireless."
+        problem = _port_kind_error(parent.interfaces, values.get("uplink_port") or "", link)
+        if problem:
+            errors["uplink_port"] = problem
+        if obj is not None:
+            problem = _port_kind_error(obj.interfaces, values.get("local_port") or "", link)
+            if problem:
+                errors["local_port"] = problem
     known = set(db.scalars(select(Vlan.id)))
     if any(v not in known for v in values.get("vlan_ids", [])):
         errors["vlan_ids"] = "Unknown VLAN."

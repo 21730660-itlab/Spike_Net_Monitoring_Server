@@ -88,6 +88,18 @@ Windows PC 24/7; the team uses it from a browser on any PC or phone.
   closed alerts, notification log, finished push jobs, discovered devices, audit log.
   A 5-second countdown before the confirm button works; clearing is itself written to the audit log.
 
+### Owner change requests, round 2: done
+- Port fields are drop-down lists of the device's real interfaces, filtered by connection type
+  (wired = ethernet, wireless = wlan/wifi, fiber = sfp), with speed and IP in each entry, and
+  "Other (type it)" for devices not read yet. The server rejects a port of the wrong type.
+- Devices in different sites can only be connected wireless (form, server check, auto-detection).
+- Interface IP addresses (/ip address) and negotiated ethernet speed (/interface ethernet monitor)
+  are read from MikroTik; wireless link speed comes from the registration table (tx / rx rate).
+  Shown on the device page, the interfaces table and the map; blank when unknown.
+- Neighbors: nothing is imported unless ticked; each row can be imported as a Device (needs an IP)
+  or a Customer (name + MAC, linked to the device that sees it), on the Discovered page and in
+  Import from device.
+
 ### Phase 4: backups and tools
 - Config backups: MikroTik `.rsc` export + `.backup` over SSH, Ubiquiti `system.cfg`;
   scheduled + manual, history, side-by-side diff, download.

@@ -1,17 +1,69 @@
 <script>
-// Suggest the chosen parent's interfaces for "Parent's port / interface".
+// Connection section: port lists filtered by connection type, the parent's ports reloaded
+// when the parent changes, and "different sites = wireless only".
 (() => {
-  const parent = document.getElementById("f_parent_id");
-  const list = document.getElementById("dl_uplink_port");
-  if (!parent || !list) return;
-  parent.addEventListener("change", async () => {
-    if (!parent.value) return;
+  const $ = (id) => document.getElementById(id);
+  const site = $("f_site_id"), parent = $("f_parent_id"), type = $("f_uplink_type");
+  const pPort = $("f_uplink_port"), lPort = $("f_local_port");
+  if (!parent || !type || !pPort) return;
+  const KIND = { wireless: ["wireless"], wired: ["wired"], fiber: ["fiber"] };
+  const note = document.createElement("div");
+  note.className = "help";
+  note.style.color = "var(--warning)";
+  type.parentElement.appendChild(note);
+
+  function filterPorts(sel) {
+    if (!sel) return;
+    const allowed = KIND[type.value];
+    [...sel.options].forEach((o) => {
+      if (!o.value || o.value === "__other__") return;
+      const ok = !allowed || allowed.includes(o.dataset.kind);
+      o.hidden = !ok;
+      o.disabled = !ok;
+    });
+    if (sel.selectedOptions[0] && sel.selectedOptions[0].disabled) sel.value = "";
+    toggleOther(sel);
+  }
+
+  function toggleOther(sel) {
+    const other = $(sel.id + "_other");
+    if (other) other.style.display = sel.value === "__other__" ? "" : "none";
+  }
+
+  function crossSiteRule() {
+    const opt = parent.selectedOptions[0];
+    const different = !!(site && site.value && opt && opt.dataset.site && opt.dataset.site !== site.value);
+    [...type.options].forEach((o) => {
+      if (o.value === "wired" || o.value === "fiber") o.disabled = different;
+    });
+    if (different && (type.value === "wired" || type.value === "fiber")) type.value = "wireless";
+    note.textContent = different ? "The parent is in another site, so the connection must be wireless." : "";
+  }
+
+  function refresh() { crossSiteRule(); filterPorts(pPort); filterPorts(lPort); }
+
+  async function loadParentPorts() {
+    const keep = ["", "__other__"];
+    [...pPort.options].forEach((o) => { if (!keep.includes(o.value)) o.remove(); });
+    if (!parent.value) { refresh(); return; }
     try {
       const res = await fetch(`/api/devices/${parent.value}/interfaces`, { headers: { Accept: "application/json" } });
-      if (!res.ok) return;
-      const names = await res.json();
-      if (names.length) list.innerHTML = names.map((n) => `<option value="${n.replace(/"/g, "&quot;")}">`).join("");
-    } catch (e) { /* keep the default suggestions */ }
-  });
+      const data = await res.json();
+      const otherOpt = pPort.querySelector('option[value="__other__"]');
+      data.interfaces.forEach((i) => {
+        const o = new Option(i.label, i.name);
+        o.dataset.kind = i.kind; o.dataset.ip = i.ip; o.dataset.speed = i.speed;
+        pPort.insertBefore(o, otherOpt);
+      });
+      if (!data.interfaces.length) pPort.value = "__other__";
+    } catch (e) { pPort.value = "__other__"; }
+    refresh();
+  }
+
+  parent.addEventListener("change", loadParentPorts);
+  type.addEventListener("change", refresh);
+  if (site) site.addEventListener("change", refresh);
+  [pPort, lPort].forEach((sel) => sel && sel.addEventListener("change", () => toggleOther(sel)));
+  refresh();
 })();
 </script>

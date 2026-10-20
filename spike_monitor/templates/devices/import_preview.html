@@ -36,12 +36,11 @@
   </tbody></table></div>
 </div>
 
-{% if neighbors %}
-<div class="panel"><h2>Neighbors not in the app yet ({{ neighbors|length }})</h2>
-  <table><thead><tr><th>Identity</th><th>IP</th><th>MAC</th><th>Board</th><th></th></tr></thead><tbody>
-  {% for n in neighbors %}<tr><td>{{ n.identity }}</td><td>{{ n.ip_address }}</td><td>{{ n.mac_address }}</td><td>{{ n.platform }} {{ n.board }}</td>
-    <td>{% if n.ip_address %}<a class="btn small" target="_blank" href="/devices/new?name={{ n.identity|urlencode }}&ip_address={{ n.ip_address|urlencode }}&mac_address={{ n.mac_address|urlencode }}&model={{ n.board|urlencode }}&parent_id={{ device.id }}{% if device.site_id %}&site_id={{ device.site_id }}{% endif %}">Add</a>{% endif %}</td></tr>{% endfor %}
-  </tbody></table></div>
+{% if nb_rows %}
+<div class="panel"><h2>Neighbors not in the app yet ({{ nb_rows|length }})</h2>
+  <p class="muted">Tick the ones you want to add. Nothing is added unless you tick it.</p>
+  {% include "generic/_neighbors_import.html" %}
+</div>
 {% endif %}
 
 <div class="actions"><button class="btn primary">Import selected</button><a class="btn" href="/devices/{{ device.id }}">Cancel</a></div>

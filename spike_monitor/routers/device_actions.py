@@ -14,6 +14,7 @@ from ..deps import audit, flash, render, require_admin, require_technician, requ
 from ..forms import MAC_RE
 from ..models import Device, HourlyRollup, MetricSample, PingResult, TrafficSample, User, Vlan, utcnow
 from ..monitoring.poller import read_inventory
+from .discovery import import_neighbors, known_addresses
 from ..security import verify_csrf
 
 router = APIRouter(prefix="/devices")
@@ -86,12 +87,14 @@ async def import_preview(device_id: int, request: Request, db: Session = Depends
     vlans = [dict(v, exists=v["vlan_id"] in known_ids, attached=v["vlan_id"] in attached)
              for v in inv.vlans if v.get("vlan_id")]
 
-    known_ips = set(db.scalars(select(Device.ip_address)))
-    known_macs = {m for m in db.scalars(select(Device.mac_address)) if m}
+    known_ips, known_macs = known_addresses(db)
     neighbors = [n for n in inv.neighbors
                  if n.ip_address not in known_ips and (not n.mac_address or n.mac_address not in known_macs)]
+    nb_rows = [{"name": n.identity, "ip": n.ip_address, "mac": n.mac_address, "platform": n.platform,
+                "board": n.board, "version": n.version, "interface": n.interface, "parent_id": device.id,
+                "parent_name": device.name} for n in neighbors]
     return render(request, "devices/import_preview.html", {
-        "device": device, "inv": inv, "changes": changes, "vlans": vlans, "neighbors": neighbors})
+        "device": device, "inv": inv, "changes": changes, "vlans": vlans, "nb_rows": nb_rows})
 
 
 @router.post("/{device_id}/import", dependencies=[Depends(verify_csrf)])
@@ -126,10 +129,15 @@ async def import_apply(device_id: int, request: Request, db: Session = Depends(g
             device.vlans.append(vlan)
             added_vlans += 1
 
+    new_devices, new_customers, problems = import_neighbors(db, form)
     audit(db, request, user.username, "device.import_settings", f"Device #{device.id} {device.name}",
-          f"fields={','.join(applied)} vlans={added_vlans}")
+          f"fields={','.join(applied)} vlans={added_vlans} devices={new_devices} customers={new_customers}")
     db.commit()
-    flash(request, f"Imported {len(applied)} field(s) and {added_vlans} VLAN(s) from the device.")
+    msg = (f"Imported {len(applied)} field(s), {added_vlans} VLAN(s), {new_devices} neighbor device(s) "
+           f"and {new_customers} customer(s).")
+    if problems:
+        msg += f" Skipped {len(problems)}: " + " ".join(problems[:10])
+    flash(request, msg, "error" if problems else "success")
     return RedirectResponse(f"/devices/{device_id}", status_code=303)
 
 

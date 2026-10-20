@@ -22,7 +22,7 @@ MAC_RE = re.compile(r"^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$")
 class Field:
     name: str
     label: str
-    kind: str = "text"  # text, combo, int, float, bool, select, multiselect, textarea, password, ip, mac, port
+    kind: str = "text"  # text, combo, port_select, int, float, bool, select, multiselect, textarea, password, ip, mac, port
     required: bool = False
     help: str = ""
     options: Callable[[Session], Options] | Options | None = None
@@ -76,6 +76,11 @@ def parse_form(fields: list[Field], form: Any) -> FormResult:
             continue
 
         raw = str(form.get(f.name, "")).strip()
+        if f.kind == "port_select":  # a list of interfaces plus "Other (type it)"
+            if raw == "__other__":
+                raw = str(form.get(f"{f.name}_other", "")).strip()
+            result.values[f.name] = raw[:64]
+            continue
         if raw == "":
             if f.required:
                 result.errors[f.name] = f"{f.label} is required."

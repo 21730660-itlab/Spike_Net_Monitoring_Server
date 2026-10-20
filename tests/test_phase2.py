@@ -82,7 +82,7 @@ def test_rates_peers_neighbors_and_discovery(app, admin):
     page = admin.get(f"/devices/{dev_id}").text
     assert "Ali Customer" in page and "Kbps" in page
     disc = admin.get("/discovery").text
-    assert "Tower2" in disc and "ip_address=10.0.0.9" in disc and f"parent_id={dev_id}" in disc
+    assert 'value="Tower2"' in disc and 'value="10.0.0.9"' in disc and f'name="nb_1_parent" value="{dev_id}"' in disc
     # Prefilled add form from the discovery link
     form = admin.get("/devices/new?name=Tower2&ip_address=10.0.0.9").text
     assert 'value="Tower2"' in form and 'value="10.0.0.9"' in form

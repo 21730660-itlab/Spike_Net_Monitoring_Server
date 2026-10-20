@@ -54,7 +54,7 @@ def test_manual_connection_fields_and_detail_page(app, admin):
                                                 "ip_address": "10.0.0.2", "uplink_port": "ether9"})
     with SessionLocal() as db:
         assert db.get(Device, ptp_id).uplink_port == ""
-    assert admin.get(f"/api/devices/{core_id}/interfaces").json() == []
+    assert admin.get(f"/api/devices/{core_id}/interfaces").json() == {"site_id": None, "interfaces": []}
 
 
 def test_detects_ports_from_parent_and_child(app):

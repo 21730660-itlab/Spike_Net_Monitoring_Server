@@ -204,6 +204,27 @@ def _ethernet_counters(api) -> dict[str, tuple[int | None, int | None]]:
             for r in rows if r.get("name")}
 
 
+def _ethernet_rates(api, names: list[str]) -> dict[str, str]:
+    """Negotiated speed of running ethernet ports, e.g. {"ether1": "1Gbps"}."""
+    from librouteros.exceptions import LibRouterosError
+
+    if not names:
+        return {}
+    try:
+        rows = [dict(r) for r in api.rawCmd("/interface/ethernet/monitor", f"=numbers={','.join(names)}", "=once=")]
+    except (LibRouterosError, OSError):
+        return {}
+    return {str(r.get("name")): str(r.get("rate", "")) for r in rows if r.get("name") and r.get("rate")}
+
+
+def interface_ips(rows: list[dict]) -> dict[str, str]:
+    ips: dict[str, list[str]] = {}
+    for r in rows:
+        if r.get("interface") and r.get("address") and not r.get("disabled"):
+            ips.setdefault(str(r["interface"]), []).append(str(r["address"]))
+    return {k: ", ".join(v) for k, v in ips.items()}
+
+
 def _registrations(api) -> list[PeerStat]:
     rows = []
     for path in (("interface", "wireless", "registration-table"),
@@ -235,9 +256,13 @@ def collect(target: ApiTarget, with_neighbors: bool = True) -> DeviceStats:
             neighbors=parse_neighbors(_rows(api, "ip", "neighbor")) if with_neighbors else [],
         )
         counters = _ethernet_counters(api)
+        ips = interface_ips(_rows(api, "ip", "address"))
+        rates = _ethernet_rates(api, [i.name for i in stats.interfaces if i.if_type == "ether" and i.running])
         for iface in stats.interfaces:
             if iface.name in counters:
                 iface.rx_broadcast, iface.rx_multicast = counters[iface.name]
+            iface.ip_addresses = ips.get(iface.name, "")
+            iface.link_speed = rates.get(iface.name, "")
         stats.summarize_peers()
         return stats
     finally:
