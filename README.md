@@ -85,6 +85,7 @@ Set environment variables before starting (for example in `run.bat`):
 | `SPIKE_STATS_CONCURRENCY` | `20` | Devices read in parallel |
 | `SPIKE_ROLLUP_RETENTION_DAYS` | `365` | How long hourly averages are kept |
 | `SPIKE_COMMAND_CONCURRENCY` | `10` | Devices a pushed command runs on at the same time |
+| `SPIKE_CA_BUNDLE` | (empty) | Extra trusted root certificate file (PEM) for Telegram/WhatsApp, e.g. your antivirus or firewall root |
 | `SPIKE_BOOTSTRAP_ADMIN_KEY` | `admin@2026` | First admin password (used only when there are no users) |
 
 ## CSV import

@@ -20,6 +20,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from . import https
+
 GRAPH_URL = "https://graph.facebook.com"
 CALLMEBOT_URL = "https://api.callmebot.com/whatsapp.php"
 MAX_PARAM = 1000
@@ -57,13 +59,13 @@ def send_callmebot(phone: str, apikey: str, text: str, timeout: float = 20) -> s
                             "\"I allow callmebot to send me messages\" to CallMeBot on WhatsApp.")
     query = urllib.parse.urlencode({"phone": f"+{number}", "text": text[:1500], "apikey": apikey})
     try:
-        with urllib.request.urlopen(f"{CALLMEBOT_URL}?{query}", timeout=timeout) as resp:
+        with https.urlopen(f"{CALLMEBOT_URL}?{query}", timeout) as resp:
             body = resp.read().decode(errors="replace")
     except urllib.error.HTTPError as exc:
         body = exc.read().decode(errors="replace")
         raise WhatsAppError(f"CallMeBot error {exc.code}: {_plain(body)}") from exc
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        raise WhatsAppError(f"Could not reach CallMeBot: {exc}") from exc
+        raise WhatsAppError(f"Could not reach CallMeBot: {https.explain(exc)}") from exc
     lowered = body.lower()
     if "invalid" in lowered or "error" in lowered or "not allowed" in lowered:
         raise WhatsAppError(f"CallMeBot: {_plain(body)}")
@@ -98,7 +100,7 @@ def send(phone_number_id: str, token: str, payload: dict, api_version: str = "v2
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with https.urlopen(req, timeout) as resp:
             body = json.loads(resp.read().decode() or "{}")
     except urllib.error.HTTPError as exc:
         try:
@@ -108,6 +110,6 @@ def send(phone_number_id: str, token: str, payload: dict, api_version: str = "v2
             detail = str(exc)
         raise WhatsAppError(f"WhatsApp API error {exc.code}: {detail}") from exc
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        raise WhatsAppError(f"Could not reach WhatsApp: {exc}") from exc
+        raise WhatsAppError(f"Could not reach WhatsApp: {https.explain(exc)}") from exc
     messages = body.get("messages") or [{}]
     return str(messages[0].get("id", ""))

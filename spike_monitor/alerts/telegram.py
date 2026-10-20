@@ -11,6 +11,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from . import https
+
 API_URL = "https://api.telegram.org"
 MAX_TEXT = 4000
 
@@ -25,7 +27,7 @@ def _call(token: str, method: str, params: dict, timeout: float = 15) -> dict | 
     req = urllib.request.Request(f"{API_URL}/bot{token}/{method}", data=urllib.parse.urlencode(params).encode(),
                                  method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with https.urlopen(req, timeout) as resp:
             body = json.loads(resp.read().decode() or "{}")
     except urllib.error.HTTPError as exc:
         try:
@@ -38,7 +40,7 @@ def _call(token: str, method: str, params: dict, timeout: float = 15) -> dict | 
             detail += " (the person must open the bot and press Start first)"
         raise TelegramError(f"Telegram error {exc.code}: {detail}") from exc
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        raise TelegramError(f"Could not reach Telegram: {exc}") from exc
+        raise TelegramError(f"Could not reach Telegram: {https.explain(exc)}") from exc
     if not body.get("ok"):
         raise TelegramError(f"Telegram: {body.get('description', 'unknown error')}")
     return body.get("result", {})

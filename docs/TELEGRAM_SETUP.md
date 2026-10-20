@@ -37,4 +37,5 @@ Then on **Alert settings**, click **Find chats**. You see each chat's ID:
 | `401 Unauthorized (check the bot token)` | Token copied wrong; get it again from @BotFather (`/token`). |
 | `403 ... press Start first` | The person never opened the bot, or blocked it. Open the bot and press Start. |
 | `400 chat not found` | Wrong chat ID; use **Find chats**. |
+| `CERTIFICATE_VERIFY_FAILED ... self-signed certificate` | Antivirus "HTTPS scanning" or a firewall is intercepting. Update the app (it now uses the Windows certificate store). If it still fails: in the antivirus, turn off HTTPS/SSL scanning or exclude `python.exe`; or export the antivirus root certificate and set `SPIKE_CA_BUNDLE` to that file in `run.bat`. |
 | Find chats shows nothing | Send a message to the bot (or in the group) first, then click Find chats again. |

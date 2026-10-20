@@ -219,7 +219,7 @@ def test_whatsapp_payload_and_errors(monkeypatch):
     assert p["template"]["components"][0]["parameters"][0]["text"] == "line1 | line2"
     assert whatsapp.build_payload("961", "a\nb", "text", "t", "en")["text"]["body"] == "a\nb"
 
-    def http_error(req, timeout):
+    def http_error(req, timeout, **kw):
         raise urllib.error.HTTPError(req.full_url, 401, "Unauthorized", {},
                                      io.BytesIO(json.dumps({"error": {"message": "Invalid OAuth access token"}}).encode()))
 
@@ -350,7 +350,7 @@ def test_callmebot_to_personal_numbers(app, admin, mgr, monkeypatch):
         def __exit__(self, *a):
             return False
 
-    def fake_urlopen(url, timeout):
+    def fake_urlopen(url, timeout, **kw):
         urls.append(url)
         return Resp(b"<p>Message queued. You will receive it in a few seconds.</p>")
 
@@ -367,7 +367,7 @@ def test_callmebot_to_personal_numbers(app, admin, mgr, monkeypatch):
     r = admin.post("/admin/alert-settings/test-whatsapp", data={"csrf_token": admin.token, "phone": "+96179040395"})
     assert "Test sent to +96179040395" in r.text and "apikey=123456" in urls[-1]
 
-    monkeypatch.setattr(whatsapp.urllib.request, "urlopen", lambda url, timeout: Resp(b"APIKey is invalid"))
+    monkeypatch.setattr(whatsapp.urllib.request, "urlopen", lambda url, timeout, **kw: Resp(b"APIKey is invalid"))
     with pytest.raises(whatsapp.WhatsAppError, match="APIKey is invalid"):
         whatsapp.send_callmebot("+96179040395", "bad", "hi")
 
@@ -409,7 +409,7 @@ def test_telegram_group_and_personal_chats(app, admin, mgr, monkeypatch):
         db.commit()
     calls = []
 
-    def fake_urlopen(req, timeout):
+    def fake_urlopen(req, timeout, **kw):
         params = urllib.parse.parse_qs(req.data.decode())
         calls.append((req.full_url, params["chat_id"][0], params["text"][0]))
         return _JsonResp(json.dumps({"ok": True, "result": {"message_id": 7}}).encode())
@@ -434,7 +434,7 @@ def test_telegram_group_and_personal_chats(app, admin, mgr, monkeypatch):
 def test_telegram_errors_and_find_chats(app, admin, monkeypatch):
     from spike_monitor.alerts import telegram
 
-    def forbidden(req, timeout):
+    def forbidden(req, timeout, **kw):
         raise urllib.error.HTTPError(req.full_url, 403, "Forbidden", {},
                                      io.BytesIO(b'{"ok":false,"description":"Forbidden: bot was blocked by the user"}'))
 
@@ -450,7 +450,7 @@ def test_telegram_errors_and_find_chats(app, admin, monkeypatch):
         {"message": {"chat": {"id": 555, "first_name": "Ali", "type": "private"}}},
     ]}
     monkeypatch.setattr(telegram.urllib.request, "urlopen",
-                        lambda req, timeout: _JsonResp(json.dumps(updates).encode()))
+                        lambda req, timeout, **kw: _JsonResp(json.dumps(updates).encode()))
     chats = {c["id"]: c for c in telegram.find_chats("1:A")}
     assert set(chats) == {"555", "-100999"} and chats["-100999"]["name"] == "NOC team"
 
@@ -478,3 +478,63 @@ def test_user_telegram_fields(app, admin):
     assert admin.post("/admin/users/new", data={**base, "telegram_chat_id": "@ali"}).status_code == 422
     assert admin.post("/admin/users/new", data={**base, "telegram_chat_id": "555"},
                       follow_redirects=False).status_code == 303
+
+
+def test_https_interception_is_explained_and_custom_ca_works(tmp_path, monkeypatch):
+    """Simulates antivirus HTTPS scanning: a server with a certificate Python does not know."""
+    import datetime
+    import http.server
+    import ssl
+    import threading
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.x509.oid import NameOID
+
+    from spike_monitor.alerts import https, telegram
+
+    key = ec.generate_private_key(ec.SECP256R1())
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Antivirus HTTPS Scanning Root")])
+    now = datetime.datetime.now(datetime.timezone.utc)
+    cert = (x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(key.public_key())
+            .serial_number(x509.random_serial_number()).not_valid_before(now - datetime.timedelta(days=1))
+            .not_valid_after(now + datetime.timedelta(days=1))
+            .add_extension(x509.SubjectAlternativeName([x509.DNSName("localhost")]), critical=False)
+            .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+            .sign(key, hashes.SHA256()))
+    cert_file, key_file = tmp_path / "ca.pem", tmp_path / "key.pem"
+    cert_file.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    key_file.write_bytes(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                           serialization.NoEncryption()))
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            self.rfile.read(int(self.headers.get("Content-Length", 0)))
+            body = b'{"ok": true, "result": {"message_id": 1}}'
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+    sctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    sctx.load_cert_chain(cert_file, key_file)
+    server.socket = sctx.wrap_socket(server.socket, server_side=True)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    monkeypatch.setattr(telegram, "API_URL", f"https://localhost:{server.server_port}")
+    try:
+        monkeypatch.delenv("SPIKE_CA_BUNDLE", raising=False)
+        https.ssl_context.cache_clear()
+        with pytest.raises(telegram.TelegramError, match="HTTPS scanning"):
+            telegram.send("1:A", "555", "hi")
+
+        monkeypatch.setenv("SPIKE_CA_BUNDLE", str(cert_file))  # trust the antivirus root
+        https.ssl_context.cache_clear()
+        assert telegram.send("1:A", "555", "hi") == "1"
+    finally:
+        server.shutdown()
+        https.ssl_context.cache_clear()

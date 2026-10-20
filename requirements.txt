@@ -9,3 +9,4 @@ bcrypt>=4.1
 icmplib>=3.0
 librouteros>=3.4
 asyncssh>=2.14
+truststore>=0.9
