@@ -89,6 +89,9 @@ def _rate(new: int | None, old: int | None, seconds: float) -> float | None:
 
 def store_stats(db: Session, device: Device, stats: DeviceStats, now: datetime) -> None:
     """Write one poll result: current state on the device + time series samples."""
+    # Uptime went backwards: the device restarted since the last read.
+    if device.uptime_s is not None and stats.uptime_s is not None and stats.uptime_s + 60 < device.uptime_s:
+        device.last_reboot_at = now
     for key in ("identity", "board_name", "cpu_pct", "mem_pct", "temperature", "voltage", "uptime_s",
                 "signal_dbm", "noise_dbm", "ccq_pct"):
         setattr(device, key, getattr(stats, key))
@@ -118,6 +121,12 @@ def store_stats(db: Session, device: Device, stats: DeviceStats, now: datetime) 
             rx_bps, tx_bps = _rate(st.rx_bytes, row.rx_bytes, seconds), _rate(st.tx_bytes, row.tx_bytes, seconds)
         row.if_type, row.mac_address, row.comment = st.if_type, st.mac_address, st.comment
         row.running, row.disabled = st.running, st.disabled
+        if row.id is not None and st.rx_broadcast is not None:
+            seconds = (now - row.updated_at).total_seconds() if row.updated_at else 0
+            bc = _rate(st.rx_broadcast, row.rx_broadcast, seconds)
+            mc = _rate(st.rx_multicast, row.rx_multicast, seconds)
+            row.bcast_pps = None if bc is None else (bc + (mc or 0)) / 8  # _rate returns bits; these are packets
+        row.rx_broadcast, row.rx_multicast = st.rx_broadcast, st.rx_multicast
         row.rx_bytes, row.tx_bytes = st.rx_bytes, st.tx_bytes
         row.rx_bps, row.tx_bps = rx_bps, tx_bps
         row.updated_at = now

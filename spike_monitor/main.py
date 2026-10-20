@@ -16,9 +16,10 @@ from .config import Settings, settings as default_settings
 from .db import SessionLocal, init_engine
 from .deps import LoginRequired, PasswordChangeRequired, render
 from .models import Role, User
+from .alerts.engine import AlertManager
 from .monitoring.engine import MonitorEngine
 from .monitoring.poller import StatsPoller
-from .routers import admin, auth, commands, dashboard, device_actions, devices, discovery, netmap
+from .routers import admin, alerts, auth, commands, dashboard, device_actions, devices, discovery, netmap
 from .routers.inventory import ALL_CRUDS
 from .security import SecretBox, hash_password
 
@@ -66,6 +67,9 @@ def create_app(cfg: Settings | None = None) -> FastAPI:
         rollup_retention_days=cfg.rollup_retention_days,
     )
 
+    alert_manager = AlertManager(SessionLocal, box, stats_interval=cfg.stats_interval)
+    engine.listeners.append(alert_manager.schedule)  # check for alerts after every ping round
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         if cfg.monitoring_enabled:
@@ -81,6 +85,7 @@ def create_app(cfg: Settings | None = None) -> FastAPI:
     app.state.secret_box = box
     app.state.engine = engine
     app.state.poller = poller
+    app.state.alert_manager = alert_manager
     app.state.session_factory = SessionLocal
     app.state.background_tasks = set()
 
@@ -98,6 +103,7 @@ def create_app(cfg: Settings | None = None) -> FastAPI:
     app.include_router(commands.router)
     app.include_router(discovery.router)
     app.include_router(netmap.router)
+    app.include_router(alerts.router)
     app.include_router(admin.router)
 
     @app.exception_handler(LoginRequired)

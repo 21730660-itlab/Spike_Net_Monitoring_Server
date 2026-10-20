@@ -16,6 +16,7 @@ from ..forms import Field, choices, normalize_mac, parse_form
 from ..models import (
     DEFAULT_PORTS,
     Brand,
+    Alert,
     CredentialProfile,
     Customer,
     Device,
@@ -26,6 +27,7 @@ from ..models import (
     User,
     utcnow,
 )
+from ..alerts.engine import KIND_LABELS
 from ..monitoring.poller import can_poll
 from ..security import verify_csrf
 
@@ -181,5 +183,9 @@ def device_detail(device_id: int, request: Request, db: Session = Depends(get_db
         "customers_by_mac": {c.mac_address: c for c in db.scalars(
             select(Customer).where(Customer.mac_address.in_([p.mac_address for p in device.wireless_peers])))},
         "can_poll": can_poll(device),
+        "open_alerts": db.scalars(select(Alert).where(Alert.device_id == device_id, Alert.resolved_at.is_(None))
+                                  .order_by(Alert.started_at)).all(),
+        "alert_labels": KIND_LABELS,
+        "now": utcnow(),
     })
 

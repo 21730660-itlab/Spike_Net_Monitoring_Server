@@ -1,0 +1,9 @@
+<form class="inline" method="post" action="/sites/{{ item.id }}/maintenance">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+  {% if item.maintenance_until and item.maintenance_until > now %}
+    <input type="hidden" name="hours" value="0"><button class="btn small" title="Until {{ item.maintenance_until|dt }}">🔧 End maintenance</button>
+  {% else %}
+    <select name="hours" style="width:auto;padding:3px 6px;font-size:.82rem"><option value="1">1 h</option><option value="4">4 h</option><option value="24">1 day</option></select>
+    <button class="btn small">🔧 Maintenance</button>
+  {% endif %}
+</form>

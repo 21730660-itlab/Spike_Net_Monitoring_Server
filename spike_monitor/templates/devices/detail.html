@@ -13,6 +13,15 @@
   <a class="btn" href="/devices/{{ device.id }}/import">📥 Import from device</a>
   {% endif %}
   {% if user.role == Role.ADMIN and device.use_ssh %}<a class="btn" href="/commands/new?device={{ device.id }}">📤 Run command</a>{% endif %}
+  <form class="inline actions" method="post" action="/devices/{{ device.id }}/maintenance">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+    {% if device.maintenance_until and device.maintenance_until > now %}
+      <input type="hidden" name="hours" value="0"><button class="btn">🔧 End maintenance</button>
+    {% else %}
+      <select name="hours" style="width:auto"><option value="1">1 hour</option><option value="4">4 hours</option><option value="24">1 day</option><option value="168">1 week</option></select>
+      <button class="btn">🔧 Maintenance</button>
+    {% endif %}
+  </form>
   <form class="inline" method="post" action="/devices/{{ device.id }}/delete" onsubmit="return confirm('Delete {{ device.name }}?')">
     <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><button class="btn danger">Delete</button>
   </form>
@@ -26,6 +35,16 @@
   <div class="card total"><div class="num">{{ "%.1f"|format(avg_latency_24h) if avg_latency_24h is not none else "—" }}</div><div class="lbl">Avg latency 24h (ms)</div></div>
 </div>
 
+{% if device.in_maintenance(now) %}
+<div class="flash" style="background:var(--bg)">🔧 <b>Maintenance</b> until {{ (device.maintenance_until if device.maintenance_until and device.maintenance_until > now else device.site.maintenance_until)|dt }}{% if not (device.maintenance_until and device.maintenance_until > now) %} (whole site){% endif %}: alerts are recorded but not sent.</div>
+{% endif %}
+{% for a in open_alerts %}
+<div class="flash {{ 'error' if a.severity == 'critical' else '' }}" style="{{ '' if a.severity == 'critical' else 'background:var(--bg)' }}">
+  <span class="pill sev-{{ a.severity }}">{{ a.severity|label }}</span> <b>{{ alert_labels.get(a.kind, a.kind) }}</b>{% if a.message %}: {{ a.message }}{% endif %}
+  <span class="muted">· since {{ a.started_at|dt }}{% if a.acknowledged_by %} · ✓ {{ a.acknowledged_by }}{% endif %}</span>
+  {% if user.has_role(Role.TECHNICIAN) and not a.acknowledged_at %}<form class="inline" method="post" action="/alerts/{{ a.id }}/ack"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><button class="btn small">Acknowledge</button></form>{% endif %}
+</div>
+{% endfor %}
 {% if device.poll_error %}<div class="flash error"><b>Could not read device data:</b> {{ device.poll_error }}</div>{% endif %}
 {% if device.last_polled and not device.poll_error or device.cpu_pct is not none %}
 <div class="grid cards" style="margin-bottom:18px">

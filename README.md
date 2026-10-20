@@ -5,7 +5,7 @@ It runs on one Windows PC and your team opens it in a browser from any PC or pho
 
 See [docs/DESIGN.md](docs/DESIGN.md) for the full requirements and the phase plan.
 
-## What works now (phases 1 and 2)
+## What works now (phases 1–3)
 
 - Users with roles (Admin / Technician / Viewer), audit log
 - Sites, VLANs, customers (MAC list), credential profiles, port profiles
@@ -22,6 +22,10 @@ See [docs/DESIGN.md](docs/DESIGN.md) for the full requirements and the phase pla
 - Traffic / health graphs up to 1 year
 - Network map: sites and their links, every device and its uplink, and a geographic map of your towers
   (the street map background needs internet on the PC viewing it)
+- Alerts: down (one alert per tower, not per device behind it), degraded, high CPU / temperature, weak signal,
+  broadcast storm / loop, reboots; acknowledge, maintenance mode, reminders and recovery messages
+- Notifications: WhatsApp (Meta Cloud API, see [docs/WHATSAPP_SETUP.md](docs/WHATSAPP_SETUP.md)),
+  Windows popup + sound on the server PC, and popups + sound in every open browser (click 🔇 to turn sound on)
 
 ## Preparing your devices
 

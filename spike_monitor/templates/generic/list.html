@@ -16,6 +16,7 @@
         {% for _, getter in crud.columns %}<td>{{ getter(item) if getter(item) is not none else "" }}</td>{% endfor %}
         {% if can_edit %}
         <td class="actions">
+          {% if crud.row_actions %}{% include crud.row_actions %}{% endif %}
           <a class="btn small" href="{{ crud.prefix }}/{{ item.id }}/edit">Edit</a>
           <form class="inline" method="post" action="{{ crud.prefix }}/{{ item.id }}/delete"
                 onsubmit="return confirm('Delete this {{ crud.singular|lower }}?')">

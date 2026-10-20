@@ -33,6 +33,15 @@ class Role:
     RANK = {VIEWER: 0, TECHNICIAN: 1, ADMIN: 2}
 
 
+class Severity:
+    CRITICAL = "critical"
+    WARNING = "warning"
+    INFO = "info"
+
+    ALL = (CRITICAL, WARNING, INFO)
+    RANK = {INFO: 0, WARNING: 1, CRITICAL: 2}
+
+
 class Brand:
     MIKROTIK = "mikrotik"
     UBIQUITI = "ubiquiti"
@@ -86,14 +95,27 @@ class User(Base):
     full_name: Mapped[str] = mapped_column(String(128), default="")
     password_hash: Mapped[str] = mapped_column(String(128))
     role: Mapped[str] = mapped_column(String(16), default=Role.VIEWER)
-    phone: Mapped[str] = mapped_column(String(32), default="")  # WhatsApp number (phase 3)
+    phone: Mapped[str] = mapped_column(String(32), default="")  # WhatsApp number, international format
+    whatsapp_alerts: Mapped[bool] = mapped_column(Boolean, default=False)
+    alert_min_severity: Mapped[str] = mapped_column(String(16), default=Severity.WARNING)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     last_login: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
+    # Sites this user gets WhatsApp alerts for; empty means all sites.
+    alert_sites: Mapped[list[Site]] = relationship(secondary="user_alert_sites")
+
     def has_role(self, minimum: str) -> bool:
         return Role.RANK.get(self.role, -1) >= Role.RANK[minimum]
+
+
+user_alert_sites = Table(
+    "user_alert_sites",
+    Base.metadata,
+    Column("user_id", ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    Column("site_id", ForeignKey("sites.id", ondelete="CASCADE"), primary_key=True),
+)
 
 
 class Site(Base):
@@ -109,6 +131,8 @@ class Site(Base):
     # Position on the topology map (saved when someone arranges the map)
     map_x: Mapped[float | None] = mapped_column(Float, nullable=True)
     map_y: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Alerts for every device in the site are not sent until this time.
+    maintenance_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     devices: Mapped[list[Device]] = relationship(back_populates="site")
 
@@ -227,6 +251,8 @@ class Device(Base):
     ssh_host_key: Mapped[str] = mapped_column(String(128), default="")
     map_x: Mapped[float | None] = mapped_column(Float, nullable=True)
     map_y: Mapped[float | None] = mapped_column(Float, nullable=True)
+    maintenance_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_reboot_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
@@ -247,6 +273,24 @@ class Device(Base):
         if self.credential_profile is not None:
             return self.credential_profile.username, box.decrypt(self.credential_profile.password_enc)
         return "", ""
+
+    def in_maintenance(self, now: datetime) -> bool:
+        if self.maintenance_until and self.maintenance_until > now:
+            return True
+        return bool(self.site and self.site.maintenance_until and self.site.maintenance_until > now)
+
+    def descendants(self) -> list[Device]:
+        found: list[Device] = []
+        seen = {self.id}
+        stack = list(self.children)
+        while stack:
+            node = stack.pop()
+            if node.id in seen:
+                continue
+            seen.add(node.id)
+            found.append(node)
+            stack.extend(node.children)
+        return found
 
     def ancestors(self) -> list[Device]:
         """Parents up the chain, nearest first. Guards against loops."""
@@ -336,6 +380,9 @@ class DeviceInterface(Base):
     tx_bps: Mapped[float | None] = mapped_column(Float, nullable=True)
     rx_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     tx_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    rx_broadcast: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    rx_multicast: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    bcast_pps: Mapped[float | None] = mapped_column(Float, nullable=True)  # broadcast+multicast packets/s
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
@@ -461,3 +508,48 @@ class CommandResult(Base):
 
     job: Mapped[CommandJob] = relationship(back_populates="results")
     device: Mapped[Device | None] = relationship()
+
+
+class Alert(Base):
+    """A problem on a device. Open while ``resolved_at`` is empty."""
+
+    __tablename__ = "alerts"
+    __table_args__ = (Index("ix_alert_open", "device_id", "kind", "resolved_at"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    device_id: Mapped[int] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String(32))
+    severity: Mapped[str] = mapped_column(String(16))
+    message: Mapped[str] = mapped_column(String(500))
+    value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    acknowledged_by: Mapped[str] = mapped_column(String(64), default="")
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    notified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_notified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    notify_count: Mapped[int] = mapped_column(Integer, default=0)
+    in_maintenance: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    device: Mapped[Device] = relationship()
+
+
+class NotificationLog(Base):
+    __tablename__ = "notification_log"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ts: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    channel: Mapped[str] = mapped_column(String(16))  # whatsapp, desktop
+    recipient: Mapped[str] = mapped_column(String(64), default="")
+    message: Mapped[str] = mapped_column(Text)
+    ok: Mapped[bool] = mapped_column(Boolean, default=True)
+    error: Mapped[str] = mapped_column(Text, default="")
+
+
+class AppSetting(Base):
+    """Key/value settings edited in the app (stored as JSON text)."""
+
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text)

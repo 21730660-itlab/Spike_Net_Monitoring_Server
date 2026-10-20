@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Alerts · Spike Net Monitor{% endblock %}
+{% block heading %}Alerts{% endblock %}
+{% block content %}
+<div class="panel">
+  <div class="topbar" style="margin-bottom:10px">
+    <div class="actions">
+      <a class="btn {{ 'primary' if tab != 'history' }}" href="/alerts">Active ({{ alerts|length if tab != 'history' else '…' }})</a>
+      <a class="btn {{ 'primary' if tab == 'history' }}" href="/alerts?tab=history">History</a>
+    </div>
+    {% if can_ack and tab != 'history' and alerts|selectattr("acknowledged_at", "none")|list %}
+    <form method="post" action="/alerts/ack-all" class="inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><button class="btn">✓ Acknowledge all</button>
+    </form>{% endif %}
+  </div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Severity</th><th>Alert</th><th>Device</th><th>Site</th><th>Started</th>{% if tab == 'history' %}<th>Resolved</th>{% else %}<th>Duration</th>{% endif %}<th>Status</th></tr></thead>
+    <tbody>
+    {% for a in alerts %}
+      <tr>
+        <td><span class="pill sev-{{ a.severity }}">{{ a.severity|label }}</span></td>
+        <td><b>{{ labels.get(a.kind, a.kind) }}</b>{% if a.message %}<br><span class="muted">{{ a.message }}</span>{% endif %}</td>
+        <td>{% if a.device %}<a href="/devices/{{ a.device_id }}">{{ a.device.name }}</a> <span class="muted">{{ a.device.ip_address }}</span>{% endif %}</td>
+        <td>{{ a.device.site.name if a.device and a.device.site else "" }}</td>
+        <td>{{ a.started_at|dt }}</td>
+        {% if tab == 'history' %}<td>{{ a.resolved_at|dt if a.resolved_at else "still open" }}</td>
+        {% else %}<td>{{ ((now - a.started_at).total_seconds()|int)|uptime }}</td>{% endif %}
+        <td>
+          {% if a.in_maintenance %}<span class="pill paused">🔧 Maintenance</span>{% endif %}
+          {% if a.acknowledged_at %}<span class="muted">✓ {{ a.acknowledged_by }}</span>
+          {% elif can_ack and not a.resolved_at %}
+            <form method="post" action="/alerts/{{ a.id }}/ack" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><button class="btn small">Acknowledge</button></form>
+          {% endif %}
+          {% if a.notified_at %}<span class="muted" title="Times notified (desktop / WhatsApp / browser)">📨 {{ a.notify_count }}</span>{% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="7" class="muted">{{ "✅ No active alerts." if tab != 'history' else "No alerts yet." }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% if tab == 'history' %}<div class="actions" style="margin-top:12px">
+    {% if page > 1 %}<a class="btn small" href="?tab=history&page={{ page - 1 }}">← Newer</a>{% endif %}
+    {% if has_next %}<a class="btn small" href="?tab=history&page={{ page + 1 }}">Older →</a>{% endif %}
+  </div>{% endif %}
+  <p class="muted">Acknowledging an alert stops repeat reminders; the alert closes by itself when the problem is fixed.</p>
+</div>
+{% endblock %}

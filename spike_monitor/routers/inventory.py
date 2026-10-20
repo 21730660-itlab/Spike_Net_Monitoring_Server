@@ -90,6 +90,7 @@ sites = Crud(
         ("Devices", lambda s: len(s.devices)),
     ],
     validate=_unique_name(Site, "site"),
+    row_actions="generic/site_actions.html",
 )
 
 

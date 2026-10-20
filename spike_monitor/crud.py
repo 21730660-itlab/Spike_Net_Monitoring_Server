@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from .db import get_db
 from .deps import audit, flash, render, require_role
 from .forms import Field, parse_form
-from .models import Role, User
+from .models import Role, User, utcnow
 from .security import SecretBox, verify_csrf
 
 Column = tuple[str, Callable[[Any], Any]]
@@ -40,6 +40,7 @@ class Crud:
     initial: Callable[[Any], dict] | None = None
     extra_fields: Callable[[Session, Any | None], list[Field]] | None = None
     detail_url: Callable[[Any], str] | None = None
+    row_actions: str = ""  # extra template included in each list row's action cell
     templates: dict[str, str] = field(default_factory=dict)
 
     def form_fields(self, db: Session, obj: Any | None) -> list[Field]:
@@ -117,7 +118,7 @@ class Crud:
                 stmt = stmt.order_by(crud.order_by)
             items = db.scalars(stmt).all()
             return render(request, crud.templates.get("list", "generic/list.html"),
-                          {"crud": crud, "items": items, "can_edit": user.has_role(crud.edit_role)})
+                          {"crud": crud, "items": items, "can_edit": user.has_role(crud.edit_role), "now": utcnow()})
 
         @router.get("/new")
         def new_page(request: Request, db: Session = Depends(get_db), user: User = Depends(editor)):

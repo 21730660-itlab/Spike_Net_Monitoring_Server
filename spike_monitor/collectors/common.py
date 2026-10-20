@@ -19,6 +19,8 @@ class InterfaceStat:
     disabled: bool = False
     rx_bytes: int | None = None
     tx_bytes: int | None = None
+    rx_broadcast: int | None = None  # ethernet only; used for broadcast storm / loop detection
+    rx_multicast: int | None = None
 
 
 @dataclass

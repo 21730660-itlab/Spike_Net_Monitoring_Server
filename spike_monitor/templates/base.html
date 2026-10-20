@@ -16,6 +16,7 @@
       <a href="/" class="{{ 'active' if path == '/' }}">Dashboard</a>
       <a href="/devices" class="{{ 'active' if path.startswith('/devices') }}">Devices</a>
       <a href="/map" class="{{ 'active' if path.startswith('/map') }}">Network map</a>
+      <a href="/alerts" class="{{ 'active' if path.startswith('/alerts') }}">Alerts <span class="nav-badge" id="nav-alerts" hidden></span></a>
       <a href="/discovery" class="{{ 'active' if path.startswith('/discovery') }}">Discovered</a>
       {% if user and user.role == Role.ADMIN %}<a href="/commands" class="{{ 'active' if path.startswith('/commands') }}">Push settings</a>{% endif %}
       <div class="section">Inventory</div>
@@ -27,6 +28,7 @@
       <a href="/credentials" class="{{ 'active' if path.startswith('/credentials') }}">Credential profiles</a>
       <div class="section">Administration</div>
       <a href="/admin/users" class="{{ 'active' if path.startswith('/admin/users') }}">Users</a>
+      <a href="/admin/alert-settings" class="{{ 'active' if path.startswith('/admin/alert-settings') }}">Alert settings</a>
       <a href="/admin/audit" class="{{ 'active' if path.startswith('/admin/audit') }}">Audit log</a>
       {% endif %}
     </nav>
@@ -36,6 +38,8 @@
       <h1>{% block heading %}{% endblock %}</h1>
       {% if user %}
       <div class="userbox">
+        <a class="bell" href="/alerts" id="bell" title="Active alerts">🔔<span class="bell-count" id="bell-count" hidden></span></a>
+        <button class="btn small" id="sound-toggle" type="button" title="Sound and popups for new alerts">🔇 Alerts sound off</button>
         <span>{{ user.full_name or user.username }} · {{ user.role|label }}</span>
         <a class="btn small" href="/account/password">Change password</a>
         <form class="inline" method="post" action="/logout">
@@ -49,6 +53,8 @@
     {% block content %}{% endblock %}
   </main>
 </div>
+<div id="toasts"></div>
+{% if user %}<script src="/static/alerts.js"></script>{% endif %}
 {% block scripts %}{% endblock %}
 </body>
 </html>

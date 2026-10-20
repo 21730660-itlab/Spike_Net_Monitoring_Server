@@ -135,3 +135,15 @@ dl.kv dd { margin: 0; }
 .legend .dot.down { background: var(--down); } .legend .dot.unreachable { background: var(--unreachable); }
 .site-pin { width: 22px; height: 22px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.5); }
 .leaflet-popup-content a { color: #2563eb; }
+
+/* Alerts */
+.pill.sev-critical { background: var(--down); } .pill.sev-warning { background: var(--warning); } .pill.sev-info { background: var(--accent); }
+.bell { position: relative; font-size: 1.3rem; text-decoration: none !important; }
+.bell-count, .nav-badge { background: var(--down); color: #fff; border-radius: 999px; font-size: .7rem; font-weight: 700; padding: 1px 6px; }
+.bell-count { position: absolute; top: -6px; right: -10px; }
+.bell.alarm { animation: ring 1s ease-in-out 3; }
+@keyframes ring { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(18deg); } 75% { transform: rotate(-18deg); } }
+#toasts { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 1000; max-width: min(420px, calc(100vw - 32px)); }
+.toast { background: var(--panel); border: 1px solid var(--border); border-left: 6px solid var(--warning); border-radius: 8px; padding: 10px 14px; box-shadow: 0 4px 16px rgba(0,0,0,.2); cursor: pointer; }
+.toast.critical { border-left-color: var(--down); } .toast.info { border-left-color: var(--accent); }
+.toast b { display: block; }

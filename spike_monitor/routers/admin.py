@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..deps import audit, flash, render, require_admin
 from ..forms import Field, choices, parse_form
-from ..models import AuditLog, Role, User
+from ..models import AuditLog, Role, Severity, Site, User
+from .inventory import site_options
 from ..security import hash_password, password_problem, verify_csrf
 
 router = APIRouter(prefix="/admin")
@@ -19,7 +20,13 @@ USER_FIELDS = [
     Field("full_name", "Full name"),
     Field("role", "Role", kind="select", required=True, options=choices(Role.ALL), default=Role.VIEWER,
           help="Admin: everything. Technician: manage devices, no passwords or users. Viewer: read only."),
-    Field("phone", "WhatsApp number", placeholder="+9617xxxxxx", help="Used for WhatsApp alerts (phase 3)."),
+    Field("phone", "WhatsApp number", placeholder="+961 70 123 456", help="International format, with country code."),
+    Field("whatsapp_alerts", "Send me WhatsApp alerts", kind="bool", default=False),
+    Field("alert_min_severity", "Alerts to receive", kind="select", default=Severity.WARNING,
+          options=[(Severity.CRITICAL, "Critical only (down, loops)"), (Severity.WARNING, "Critical + warnings"),
+                   (Severity.INFO, "Everything (incl. reboots)")]),
+    Field("alert_site_ids", "Only for these sites", kind="multiselect", options=site_options,
+          help="Leave empty to receive alerts for all sites. Hold Ctrl to select several."),
     Field("password", "Password", kind="password",
           help="Required for new users. Leave empty to keep the current password."),
     Field("must_change_password", "Must change password at next login", kind="bool", default=True),
@@ -55,6 +62,7 @@ def edit_user(user_id: int, request: Request, db: Session = Depends(get_db), use
     target = db.get(User, user_id) or _404()
     values = {f.name: getattr(target, f.name, "") for f in USER_FIELDS}
     values["password"] = ""
+    values["alert_site_ids"] = [s.id for s in target.alert_sites]
     return _form(request, db, target, values, {})
 
 
@@ -65,12 +73,15 @@ def _404():
 async def _save(request: Request, db: Session, admin: User, target: User | None):
     result = parse_form(USER_FIELDS, await request.form())
     v = result.values
+    v["alert_min_severity"] = v.get("alert_min_severity") or Severity.WARNING
     if result.ok:
         stmt = select(User).where(func.lower(User.username) == v["username"].lower())
         if target is not None:
             stmt = stmt.where(User.id != target.id)
         if db.scalars(stmt).first():
             result.errors["username"] = "This username is taken."
+        if v["whatsapp_alerts"] and not v["phone"]:
+            result.errors["phone"] = "Enter the WhatsApp number to send alerts to."
         if target is None and not v["password"]:
             result.errors["password"] = "Set a password for the new user."
         if v["password"]:
@@ -87,8 +98,10 @@ async def _save(request: Request, db: Session, admin: User, target: User | None)
     if creating:
         target = User()
         db.add(target)
-    for key in ("username", "full_name", "role", "phone", "must_change_password", "is_active"):
+    for key in ("username", "full_name", "role", "phone", "must_change_password", "is_active",
+                "whatsapp_alerts", "alert_min_severity"):
         setattr(target, key, v[key])
+    target.alert_sites = [s for s in (db.get(Site, i) for i in v["alert_site_ids"]) if s is not None]
     if v["password"]:
         target.password_hash = hash_password(v["password"])
     db.flush()

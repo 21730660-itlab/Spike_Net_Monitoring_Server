@@ -20,6 +20,11 @@ const SpikeUI = (() => {
         document.getElementById("problems").innerHTML = s.problems.length
           ? s.problems.map((p) => `<tr><td>${pill(p.status)}</td><td><a href="/devices/${p.id}">${esc(p.name)}</a> <span class="muted">${esc(p.ip)}</span></td><td>${esc(p.site)}</td><td>${esc(p.since)}</td></tr>`).join("")
           : `<tr><td colspan="4" class="muted">✅ No problems.</td></tr>`;
+        const sites = document.getElementById("sites");
+        if (sites && s.sites.length) {
+          sites.innerHTML = s.sites.map((x) => `<tr><td>${esc(x.name)}</td><td>${x.total}</td><td>${x.counts.up}</td>` +
+            `<td>${x.counts.warning}</td><td>${x.counts.down + x.counts.unreachable}</td></tr>`).join("");
+        }
         if (s.engine.last_cycle_at) {
           document.getElementById("engine-info").textContent =
             `Last check: ${s.engine.last_cycle_at} · took ${s.engine.last_cycle_seconds.toFixed(1)}s · every ${s.engine.interval}s`;

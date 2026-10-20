@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block heading %}Alert settings{% endblock %}
+{% block content %}
+{% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+<form method="post" action="/admin/alert-settings">
+<input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+<div class="grid two">
+  <div class="panel"><h2>Thresholds</h2>
+    <div class="form-grid">
+      <div><label>High CPU (%)</label><input type="number" step="any" name="cpu_pct" value="{{ s.cpu_pct }}"></div>
+      <div><label>High temperature (°C)</label><input type="number" step="any" name="temperature_c" value="{{ s.temperature_c }}"></div>
+      <div><label>Weak signal (dBm)</label><input type="number" step="any" name="signal_dbm" value="{{ s.signal_dbm }}">
+        <div class="help">For PTP links, stations and upstream links.</div></div>
+      <div><label>Broadcast storm (packets/s on one port)</label><input type="number" step="any" name="broadcast_pps" value="{{ s.broadcast_pps }}">
+        <div class="help">A layer 2 loop shows up as a flood of broadcast packets. MikroTik ethernet ports.</div></div>
+      <div><label>"Cannot read device" after (minutes)</label><input type="number" name="poll_failed_minutes" value="{{ s.poll_failed_minutes }}"></div>
+    </div>
+    <p class="help">Latency and packet-loss limits are set per device (Edit device → Monitoring).</p>
+  </div>
+  <div class="panel"><h2>Timing</h2>
+    <div class="form-grid">
+      <div><label>Send warnings only after (minutes)</label><input type="number" name="warning_delay_minutes" value="{{ s.warning_delay_minutes }}">
+        <div class="help">Avoids messages for short spikes. Critical alerts (down, loop) are sent at once.</div></div>
+      <div><label>Remind about unacknowledged critical alerts every (minutes)</label><input type="number" name="repeat_minutes" value="{{ s.repeat_minutes }}">
+        <div class="help">0 = never.</div></div>
+    </div>
+    <p><label class="check"><input type="checkbox" name="notify_recovery" {{ 'checked' if s.notify_recovery }}> Send a message when a problem is fixed</label></p>
+    <p><label class="check"><input type="checkbox" name="notify_reboot" {{ 'checked' if s.notify_reboot }}> Send a message when a device reboots</label></p>
+  </div>
+</div>
+
+<div class="grid two">
+  <div class="panel"><h2>🖥️ Desktop popup + sound (server PC)</h2>
+    <p><label class="check"><input type="checkbox" name="desktop_enabled" {{ 'checked' if s.desktop_enabled }}> Show a Windows popup with sound on the server PC</label></p>
+    <p><label>For</label><select name="desktop_min_severity" style="width:auto">
+      {% for v, l in [("critical", "Critical only"), ("warning", "Critical + warnings"), ("info", "Everything")] %}<option value="{{ v }}" {{ 'selected' if s.desktop_min_severity == v }}>{{ l }}</option>{% endfor %}
+    </select></p>
+    <p class="help">Every PC or phone that has this app open in a browser also gets a popup and sound for new alerts (click 🔔 at the top to allow notifications).</p>
+  </div>
+  <div class="panel"><h2>📱 WhatsApp (Meta Cloud API)</h2>
+    <p><label class="check"><input type="checkbox" name="whatsapp_enabled" {{ 'checked' if s.whatsapp_enabled }}> Send WhatsApp alerts</label></p>
+    <div class="form-grid">
+      <div><label>Phone number ID</label><input type="text" name="wa_phone_number_id" value="{{ s.wa_phone_number_id }}" placeholder="e.g. 123456789012345"></div>
+      <div><label>Access token</label><input type="password" name="wa_token" autocomplete="new-password" placeholder="{{ '•••••• saved' if has_token else 'paste the permanent token' }}">
+        {% if has_token %}<label class="check" style="font-weight:400"><input type="checkbox" name="clear_token"> Remove saved token</label>{% endif %}</div>
+      <div><label>Message type</label><select name="wa_mode">
+        <option value="template" {{ 'selected' if s.wa_mode == 'template' }}>Template (recommended, works any time)</option>
+        <option value="text" {{ 'selected' if s.wa_mode == 'text' }}>Plain text (only within 24 h after the person wrote to you)</option></select></div>
+      <div><label>Template name</label><input type="text" name="wa_template" value="{{ s.wa_template }}"></div>
+      <div><label>Template language code</label><input type="text" name="wa_language" value="{{ s.wa_language }}" placeholder="en or ar"></div>
+      <div><label>Graph API version</label><input type="text" name="wa_api_version" value="{{ s.wa_api_version }}"></div>
+    </div>
+    <p class="help">Recipients: users with "Send me WhatsApp alerts" ticked (Users page).
+      Now: {% for u in recipients %}<b>{{ u.username }}</b> {{ u.phone }}{{ ", " if not loop.last }}{% else %}nobody yet{% endfor %}.</p>
+  </div>
+</div>
+<button class="btn primary">Save settings</button>
+</form>
+
+<div class="grid two" style="margin-top:18px">
+  <div class="panel"><h2>Test</h2>
+    <form method="post" action="/admin/alert-settings/test-whatsapp" class="actions">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+      <input type="text" name="phone" placeholder="+961 70 123 456" style="width:auto;min-width:200px" value="{{ user.phone }}">
+      <button class="btn">Send WhatsApp test</button>
+    </form>
+    <form method="post" action="/admin/alert-settings/test-desktop" style="margin-top:10px">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><button class="btn">Show desktop test popup</button>
+    </form>
+    <p class="help">Save the settings before testing.</p>
+  </div>
+  <div class="panel"><h2>Recent notifications</h2>
+    <div class="table-wrap" style="max-height:320px;overflow:auto"><table>
+      <thead><tr><th>Time</th><th>Channel</th><th>To</th><th>Result</th></tr></thead>
+      <tbody>{% for l in logs %}<tr title="{{ l.message }}"><td>{{ l.ts|dt }}</td><td>{{ l.channel }}</td><td>{{ l.recipient }}</td>
+        <td>{% if l.ok %}<span class="pill up">sent</span>{% else %}<span class="pill down">failed</span> <span class="muted">{{ l.error }}</span>{% endif %}</td></tr>
+      {% else %}<tr><td colspan="4" class="muted">Nothing sent yet.</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </div>
+</div>
+{% endblock %}

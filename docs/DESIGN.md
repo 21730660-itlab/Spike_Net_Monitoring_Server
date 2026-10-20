@@ -60,12 +60,20 @@ Windows PC 24/7; the team uses it from a browser on any PC or phone.
   filter by site), Geographic view (sites on a street map with link lines, drag pins / place sites).
   Layout can be arranged and saved; refreshes every 20 s.
 
-### Phase 3: alerts
-- Alert rules: down/up, latency, loss, weak signal, high CPU/temperature, loop detected.
-- Parent-aware: one alert for a down tower, not one per device behind it.
-- WhatsApp (Meta Cloud API, per-user numbers and site subscriptions), desktop tray app with sound.
-- Acknowledge, maintenance mode.
-- Loop / broadcast storm detection (broadcast rates, MAC flapping, RouterOS loop-protect).
+### Phase 3: done
+- Alert engine runs after every ping round and compares "what is wrong now" with open alerts.
+- Alerts: down (critical; upstream link marked), degraded latency/loss, high CPU, high temperature,
+  weak signal (PTP links, stations, upstream), broadcast storm / possible loop (MikroTik ethernet
+  broadcast+multicast packets per second), device rebooted (uptime went backwards), cannot read device.
+- Parent-aware: one alert for a down tower with "N devices behind it unreachable"; none for the devices behind it.
+- Hysteresis on metric alerts; metric alerts are neither opened nor closed on stale data.
+- Warnings are sent only after a delay (default 5 min); critical at once; reminders for unacknowledged
+  critical alerts (default every 60 min); recovery messages with the duration.
+- Acknowledge (one / all), maintenance mode per device and per site (alerts recorded, not sent).
+- WhatsApp Cloud API: template or text mode, per-user number, severity and site subscriptions,
+  several alerts grouped into one message, notification log, test button. Setup guide: docs/WHATSAPP_SETUP.md.
+- Desktop popup + sound on the Windows server PC (built-in PowerShell toast + winsound, no extra packages).
+- Every open browser page: alert bell with count, popups, alarm sound and system notifications.
 
 ### Phase 4: backups and tools
 - Config backups: MikroTik `.rsc` export + `.backup` over SSH, Ubiquiti `system.cfg`;

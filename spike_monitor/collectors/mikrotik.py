@@ -192,6 +192,18 @@ def parse_neighbors(rows: list[dict]) -> list[NeighborStat]:
     ]
 
 
+def _ethernet_counters(api) -> dict[str, tuple[int | None, int | None]]:
+    """Broadcast / multicast receive counters per ethernet port (for loop detection)."""
+    from librouteros.exceptions import LibRouterosError
+
+    try:
+        rows = [dict(r) for r in api.rawCmd("/interface/ethernet/print", "=stats=")]
+    except (LibRouterosError, OSError):
+        return {}
+    return {str(r.get("name")): (to_int(r.get("rx-broadcast")), to_int(r.get("rx-multicast")))
+            for r in rows if r.get("name")}
+
+
 def _registrations(api) -> list[PeerStat]:
     rows = []
     for path in (("interface", "wireless", "registration-table"),
@@ -222,6 +234,10 @@ def collect(target: ApiTarget, with_neighbors: bool = True) -> DeviceStats:
             peers=_registrations(api),
             neighbors=parse_neighbors(_rows(api, "ip", "neighbor")) if with_neighbors else [],
         )
+        counters = _ethernet_counters(api)
+        for iface in stats.interfaces:
+            if iface.name in counters:
+                iface.rx_broadcast, iface.rx_multicast = counters[iface.name]
         stats.summarize_peers()
         return stats
     finally:
