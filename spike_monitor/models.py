@@ -64,6 +64,14 @@ class DeviceType:
     ALL = (UPSTREAM, ROUTER, ACCESS_POINT, PTP_LINK, STATION, SWITCH, SERVER, OTHER)
 
 
+class LinkType:
+    WIRED = "wired"
+    WIRELESS = "wireless"
+    FIBER = "fiber"
+
+    ALL = (WIRED, WIRELESS, FIBER)
+
+
 class Status:
     UNKNOWN = "unknown"
     UP = "up"
@@ -199,6 +207,12 @@ class Device(Base):
     device_type: Mapped[str] = mapped_column(String(16), default=DeviceType.ROUTER)
     site_id: Mapped[int | None] = mapped_column(ForeignKey("sites.id", ondelete="SET NULL"), nullable=True)
     parent_id: Mapped[int | None] = mapped_column(ForeignKey("devices.id", ondelete="SET NULL"), nullable=True)
+    # How this device connects to its parent. Filled by hand, or detected from the parent's
+    # neighbor / wireless tables when left empty ("auto" fields are overwritten by detection).
+    uplink_type: Mapped[str] = mapped_column(String(16), default="")  # wired, wireless, fiber
+    uplink_port: Mapped[str] = mapped_column(String(64), default="")  # interface on the parent, e.g. ether3
+    local_port: Mapped[str] = mapped_column(String(64), default="")  # interface on this device, e.g. ether1
+    uplink_auto: Mapped[bool] = mapped_column(Boolean, default=True)  # False once someone sets it by hand
 
     # Inventory details (filled by hand now; "Import from device" in phase 2)
     mac_address: Mapped[str] = mapped_column(String(32), default="")

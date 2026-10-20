@@ -21,6 +21,7 @@ from ..models import (
     Customer,
     Device,
     DeviceType,
+    LinkType,
     PingResult,
     Site,
     StatusEvent,
@@ -34,7 +35,8 @@ from ..security import verify_csrf
 router = APIRouter(prefix="/devices")
 
 CSV_COLUMNS = [
-    "name", "ip_address", "brand", "device_type", "site", "parent", "mac_address", "model",
+    "name", "ip_address", "brand", "device_type", "site", "parent", "uplink_type", "uplink_port", "local_port",
+    "mac_address", "model",
     "serial_number", "os_version", "credential_profile", "username", "password",
     *DEFAULT_PORTS, "notes",
 ]
@@ -45,6 +47,7 @@ _CSV_FIELDS = [
     Field("brand", "brand", kind="select", options=choices(Brand.ALL)),
     Field("device_type", "device_type", kind="select", options=choices(DeviceType.ALL)),
     Field("mac_address", "mac_address", kind="mac"),
+    Field("uplink_type", "uplink_type", kind="select", options=choices(LinkType.ALL)),
     *[Field(p, p, kind="port") for p in DEFAULT_PORTS],
 ]
 
@@ -58,9 +61,10 @@ def import_page(request: Request, user: User = Depends(require_technician)):
 def import_template(user: User = Depends(require_technician)):
     sample = [
         CSV_COLUMNS,
-        ["Core Router", "10.0.0.1", "mikrotik", "router", "Main POP", "", "", "RB4011", "", "7.15.3",
+        ["Core Router", "10.0.0.1", "mikrotik", "router", "Main POP", "", "", "", "", "", "RB4011", "", "7.15.3",
          "", "admin", "secret", "8291", "22", "8728", "8729", "80", "443", ""],
-        ["Tower 1 AP", "10.0.1.2", "ubiquiti", "access_point", "Tower 1", "Core Router", "", "Rocket 5AC",
+        ["Tower 1 AP", "10.0.1.2", "ubiquiti", "access_point", "Tower 1", "Core Router", "wireless", "wlan1", "ath0",
+         "", "Rocket 5AC",
          "", "8.7.11", "", "ubnt", "secret", "8291", "22", "8728", "8729", "80", "443", ""],
     ]
     buf = io.StringIO()
@@ -106,6 +110,11 @@ async def import_devices(
         device.device_type = v["device_type"] or device.device_type or DeviceType.ROUTER
         if v["mac_address"]:
             device.mac_address = normalize_mac(v["mac_address"])
+        if v["uplink_type"] or row.get("uplink_port") or row.get("local_port"):
+            device.uplink_type = v["uplink_type"] or device.uplink_type
+            device.uplink_port = row.get("uplink_port", "")[:64] or device.uplink_port
+            device.local_port = row.get("local_port", "")[:64] or device.local_port
+            device.uplink_auto = False
         for key in ("model", "serial_number", "os_version", "notes", "username"):
             if row.get(key):
                 setattr(device, key, row[key])

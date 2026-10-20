@@ -21,3 +21,4 @@
   </form>
 </div>
 {% endblock %}
+{% block scripts %}{% set script = crud.templates.get("form_script") if crud.templates else none %}{% if script %}{% include script %}{% endif %}{% endblock %}

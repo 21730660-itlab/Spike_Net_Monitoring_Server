@@ -60,12 +60,19 @@ def build_map(db: Session) -> dict:
         if d.parent is not None and d.parent.site_id != d.site_id:
             a, b = d.parent.site_id or 0, d.site_id or 0
             links[(a, b)].append(d)
+    def link_kind(items: list[Device]) -> str:
+        kinds = {d.uplink_type for d in items if d.uplink_type}
+        return kinds.pop() if len(kinds) == 1 else ("mixed" if kinds else "")
+
     site_links = [
         {
             "from": a, "to": b, "count": len(items),
             "status": worst(d.status for d in items),
             "label": ", ".join(d.name for d in items[:3]) + (f" +{len(items) - 3}" if len(items) > 3 else ""),
             "signal": min((d.signal_dbm for d in items if d.signal_dbm is not None), default=None),
+            "type": link_kind(items),
+            "links": [{"parent": d.parent.name, "child": d.name, "type": d.uplink_type,
+                       "parent_port": d.uplink_port, "child_port": d.local_port} for d in items],
         }
         for (a, b), items in links.items()
     ]
@@ -75,6 +82,8 @@ def build_map(db: Session) -> dict:
             "id": d.id, "name": d.name, "ip": d.ip_address, "site_id": d.site_id or 0, "parent_id": d.parent_id,
             "status": d.status, "type": d.device_type, "brand": d.brand, "x": d.map_x, "y": d.map_y,
             "latency": d.last_latency_ms, "signal": d.signal_dbm, "clients": d.wireless_clients,
+            "uplink_type": d.uplink_type, "uplink_port": d.uplink_port, "local_port": d.local_port,
+            "parent_name": d.parent.name if d.parent else "",
         }
         for d in devices
     ]
@@ -89,6 +98,12 @@ def map_page(request: Request, user: User = Depends(require_viewer)):
 @router.get("/api/map")
 def map_data(db: Session = Depends(get_db), user: User = Depends(require_viewer)):
     return build_map(db)
+
+
+@router.get("/api/devices/{device_id}/interfaces")
+def device_interfaces(device_id: int, db: Session = Depends(get_db), user: User = Depends(require_viewer)):
+    device = db.get(Device, device_id)
+    return [i.name for i in device.interfaces] if device else []
 
 
 @router.post("/api/map/layout", dependencies=[Depends(verify_csrf)])

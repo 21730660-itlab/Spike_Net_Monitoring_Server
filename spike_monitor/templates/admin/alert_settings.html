@@ -133,7 +133,7 @@ prov.addEventListener("change", showProvider); showProvider();
     </form>
     <p class="help">Save the settings before testing.</p>
   </div>
-  <div class="panel"><h2>Recent notifications</h2>
+  <div class="panel"><div class="topbar" style="margin-bottom:8px"><h2 style="margin:0">Recent notifications</h2>{% with kind="notifications", what="the notification log", device_id=None %}{% include "generic/_clear.html" %}{% endwith %}</div>
     <div class="table-wrap" style="max-height:320px;overflow:auto"><table>
       <thead><tr><th>Time</th><th>Channel</th><th>To</th><th>Result</th></tr></thead>
       <tbody>{% for l in logs %}<tr title="{{ l.message }}"><td>{{ l.ts|dt }}</td><td>{{ l.channel }}</td><td>{{ l.recipient }}</td>

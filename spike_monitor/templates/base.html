@@ -54,7 +54,12 @@
   </main>
 </div>
 <div id="toasts"></div>
-{% if user %}<script src="/static/alerts.js"></script>{% endif %}
+<dialog id="confirm-dialog" class="confirm-dialog">
+  <p data-text style="font-weight:600;margin-top:0"></p>
+  <div class="actions"><button type="button" class="btn danger" data-yes disabled>Yes, clear</button>
+    <button type="button" class="btn" data-no>Cancel</button></div>
+</dialog>
+{% if user %}<script src="/static/alerts.js"></script><script src="/static/confirm.js"></script>{% endif %}
 {% block scripts %}{% endblock %}
 </body>
 </html>

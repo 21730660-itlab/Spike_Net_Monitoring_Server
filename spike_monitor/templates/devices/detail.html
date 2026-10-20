@@ -60,7 +60,7 @@
 
 <div class="panel">
   <div class="topbar" style="margin-bottom:8px"><h2 style="margin:0">Latency &amp; packet loss</h2>
-    <select id="range" style="width:auto"><option value="1">1 hour</option><option value="6">6 hours</option><option value="24" selected>24 hours</option><option value="168">7 days</option><option value="720">30 days</option><option value="8760">1 year</option></select>
+    {% with kind="device_data", what="all graph history (latency, CPU, traffic) of this device", device_id=device.id, button="Clear graph history" %}{% include "generic/_clear.html" %}{% endwith %} <select id="range" style="width:auto"><option value="1">1 hour</option><option value="6">6 hours</option><option value="24" selected>24 hours</option><option value="168">7 days</option><option value="720">30 days</option><option value="8760">1 year</option></select>
   </div>
   <div class="chart-box"><canvas id="chart"></canvas></div>
 </div>
@@ -113,8 +113,14 @@
       <dt>IP address</dt><dd>{{ device.ip_address }}</dd>
       <dt>Brand / type</dt><dd>{{ device.brand|label }} · {{ device.device_type|label }}</dd>
       <dt>Site</dt><dd>{% if device.site %}{{ device.site.name }}{% else %}—{% endif %}</dd>
-      <dt>Parent (uplink)</dt><dd>{% if device.parent %}<a href="/devices/{{ device.parent.id }}">{{ device.parent.name }}</a>{% else %}—{% endif %}</dd>
-      <dt>Connected devices</dt><dd>{% for c in device.children %}<a href="/devices/{{ c.id }}">{{ c.name }}</a>{{ ", " if not loop.last }}{% else %}—{% endfor %}</dd>
+      <dt>Parent (uplink)</dt><dd>{% if device.parent %}<a href="/devices/{{ device.parent.id }}">{{ device.parent.name }}</a>
+        {% if device.uplink_type or device.uplink_port or device.local_port %}<br><span class="muted">
+          {{ {"wired": "🔌 Wired", "wireless": "📶 Wireless", "fiber": "💡 Fiber"}.get(device.uplink_type, "Connection") }}:
+          {{ device.parent.name }}{% if device.uplink_port %} <b>{{ device.uplink_port }}</b>{% endif %} → this device{% if device.local_port %} <b>{{ device.local_port }}</b>{% endif %}
+          {% if device.uplink_auto %}(detected){% endif %}</span>
+        {% else %}<br><span class="muted">Connection type and ports not known yet{% if user.has_role(Role.TECHNICIAN) %} (<a href="/devices/{{ device.id }}/edit">set them</a>){% endif %}</span>{% endif %}
+        {% else %}—{% endif %}</dd>
+      <dt>Connected devices</dt><dd>{% for c in device.children %}<a href="/devices/{{ c.id }}">{{ c.name }}</a>{% if c.uplink_port or c.uplink_type %} <span class="muted">({{ c.uplink_port }}{{ " · " if c.uplink_port and c.uplink_type }}{{ c.uplink_type }})</span>{% endif %}{{ ", " if not loop.last }}{% else %}—{% endfor %}</dd>
       <dt>VLANs</dt><dd>{% for v in device.vlans %}{{ v.vlan_id }} ({{ v.name }}){{ ", " if not loop.last }}{% else %}—{% endfor %}</dd>
       <dt>MAC</dt><dd>{{ device.mac_address or "—" }}</dd>
       <dt>Model</dt><dd>{{ device.model or "—" }}</dd>
@@ -144,7 +150,7 @@
   </div>
 </div>
 
-<div class="panel"><h2>Status history</h2>
+<div class="panel"><div class="topbar" style="margin-bottom:8px"><h2 style="margin:0">Status history</h2>{% with kind="device_events", what="the status history of this device", device_id=device.id %}{% include "generic/_clear.html" %}{% endwith %}</div>
   <div class="table-wrap"><table>
     <thead><tr><th>Time</th><th>From</th><th>To</th><th>Message</th></tr></thead>
     <tbody>{% for e in events %}<tr><td>{{ e.ts|dt }}</td><td><span class="pill {{ e.old_status }}">{{ e.old_status|label }}</span></td><td><span class="pill {{ e.new_status }}">{{ e.new_status|label }}</span></td><td>{{ e.message }}</td></tr>

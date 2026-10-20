@@ -22,7 +22,7 @@ MAC_RE = re.compile(r"^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$")
 class Field:
     name: str
     label: str
-    kind: str = "text"  # text, int, float, bool, select, multiselect, textarea, password, ip, mac, port
+    kind: str = "text"  # text, combo, int, float, bool, select, multiselect, textarea, password, ip, mac, port
     required: bool = False
     help: str = ""
     options: Callable[[Session], Options] | Options | None = None
@@ -31,6 +31,10 @@ class Field:
     group: str = ""
     min_value: float | None = None
     max_value: float | None = None
+    # Extra data-* attributes per option value, e.g. {"12": {"site": "3"}} (used for filtering in the browser)
+    option_attrs: Callable[[Session], dict[str, dict[str, str]]] | None = None
+    # For kind "combo": free text with suggestions (an HTML datalist)
+    suggestions: list[str] = field(default_factory=list)
 
     def resolve_options(self, db: Session) -> Options:
         if self.options is None:
@@ -76,7 +80,7 @@ def parse_form(fields: list[Field], form: Any) -> FormResult:
             if f.required:
                 result.errors[f.name] = f"{f.label} is required."
             # Empty optional numbers/selects become None, text stays "".
-            result.values[f.name] = "" if f.kind in ("text", "textarea", "password", "mac") else None
+            result.values[f.name] = "" if f.kind in ("text", "combo", "textarea", "password", "mac") else None
             continue
 
         try:

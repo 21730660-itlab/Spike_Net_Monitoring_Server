@@ -1,0 +1,17 @@
+<script>
+// Suggest the chosen parent's interfaces for "Parent's port / interface".
+(() => {
+  const parent = document.getElementById("f_parent_id");
+  const list = document.getElementById("dl_uplink_port");
+  if (!parent || !list) return;
+  parent.addEventListener("change", async () => {
+    if (!parent.value) return;
+    try {
+      const res = await fetch(`/api/devices/${parent.value}/interfaces`, { headers: { Accept: "application/json" } });
+      if (!res.ok) return;
+      const names = await res.json();
+      if (names.length) list.innerHTML = names.map((n) => `<option value="${n.replace(/"/g, "&quot;")}">`).join("");
+    } catch (e) { /* keep the default suggestions */ }
+  });
+})();
+</script>

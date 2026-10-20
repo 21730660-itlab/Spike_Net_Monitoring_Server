@@ -147,3 +147,11 @@ dl.kv dd { margin: 0; }
 .toast { background: var(--panel); border: 1px solid var(--border); border-left: 6px solid var(--warning); border-radius: 8px; padding: 10px 14px; box-shadow: 0 4px 16px rgba(0,0,0,.2); cursor: pointer; }
 .toast.critical { border-left-color: var(--down); } .toast.info { border-left-color: var(--accent); }
 .toast b { display: block; }
+
+.legend .line { display: inline-block; width: 26px; height: 0; border-top: 3px solid var(--muted); margin-right: 5px; vertical-align: 3px; }
+.legend .line.wireless { border-top-style: dashed; }
+.legend .line.fiber { border-top-width: 5px; }
+
+.confirm-dialog { border: 1px solid var(--border); border-radius: 10px; background: var(--panel); color: var(--text); padding: 20px; max-width: min(420px, calc(100vw - 32px)); }
+.confirm-dialog::backdrop { background: rgba(0, 0, 0, .45); }
+.btn:disabled { opacity: .55; cursor: not-allowed; }

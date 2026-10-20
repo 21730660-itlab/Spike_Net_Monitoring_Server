@@ -1,0 +1,24 @@
+<script>
+// Only offer the devices of the chosen site.
+(() => {
+  const site = document.getElementById("f_site_id");
+  const dev = document.getElementById("f_access_point_id");
+  if (!site || !dev) return;
+  const filter = () => {
+    [...dev.options].forEach((o) => {
+      if (!o.value) return;  // "— none —"
+      const ok = !site.value || o.dataset.site === site.value;
+      o.hidden = !ok;
+      o.disabled = !ok;
+    });
+    if (dev.selectedOptions[0] && dev.selectedOptions[0].disabled) dev.value = "";
+  };
+  site.addEventListener("change", filter);
+  // Picking a device first fills in its site.
+  dev.addEventListener("change", () => {
+    const o = dev.selectedOptions[0];
+    if (o && o.dataset.site && !site.value) { site.value = o.dataset.site; filter(); }
+  });
+  filter();
+})();
+</script>

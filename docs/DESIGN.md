@@ -78,6 +78,16 @@ Windows PC 24/7; the team uses it from a browser on any PC or phone.
 - Desktop popup + sound on the Windows server PC (built-in PowerShell toast + winsound, no extra packages).
 - Every open browser page: alert bell with count, popups, alarm sound and system notifications.
 
+### Owner change requests, round 1: done
+- Device connection: connected by (wired / wireless / fiber), parent's port, this device's port.
+  Typed by hand, imported from CSV, or detected automatically from the parent's wireless
+  registration table and neighbor table (and the device's own neighbor table). The map shows
+  wired solid, wireless dashed, fiber thick, labelled "parent port → device port · signal".
+- Customers: choosing a site limits the device list to that site (checked on the server too).
+- Clear history (admin) on every log page: status events (all / per device), device graph data,
+  closed alerts, notification log, finished push jobs, discovered devices, audit log.
+  A 5-second countdown before the confirm button works; clearing is itself written to the audit log.
+
 ### Phase 4: backups and tools
 - Config backups: MikroTik `.rsc` export + `.backup` over SSH, Ubiquiti `system.cfg`;
   scheduled + manual, history, side-by-side diff, download.

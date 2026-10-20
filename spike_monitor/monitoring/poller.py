@@ -157,6 +157,57 @@ def store_stats(db: Session, device: Device, stats: DeviceStats, now: datetime) 
                         ccq_pct=stats.ccq_pct))
 
 
+WIRELESS_IF_TYPES = ("wlan", "wifi", "wifiwave2", "wireless")
+
+
+def _macs(device: Device) -> set[str]:
+    macs = {i.mac_address for i in device.interfaces if i.mac_address}
+    if device.mac_address:
+        macs.add(device.mac_address)
+    return macs
+
+
+def detect_uplinks(db: Session, device: Device) -> None:
+    """Fill how devices connect, from this device's wireless clients and neighbor table.
+
+    Runs after each poll. Works in both directions: for this device's children (the port on
+    this device) and for this device itself (its own port towards its parent). Values someone
+    typed by hand (uplink_auto = False) are never changed.
+    """
+    if_types = {i.name: i.if_type for i in device.interfaces}
+    peers = {p.mac_address: p for p in device.wireless_peers}
+    neighbors = db.scalars(select(Neighbor).where(Neighbor.seen_by_id == device.id)).all()
+
+    def link_type(port: str, via_radio: bool) -> str:
+        return "wireless" if via_radio or if_types.get(port, "") in WIRELESS_IF_TYPES else "wired"
+
+    for child in db.scalars(select(Device).where(Device.parent_id == device.id, Device.uplink_auto)):
+        macs = _macs(child)
+        peer = next((peers[m] for m in macs if m in peers), None)
+        if peer is not None:
+            child.uplink_port, child.uplink_type = peer.interface, "wireless"
+            continue
+        n = next((n for n in neighbors if (n.ip_address and n.ip_address == child.ip_address)
+                  or (n.mac_address and n.mac_address in macs)), None)
+        if n is not None and n.interface:
+            child.uplink_port, child.uplink_type = n.interface, link_type(n.interface, False)
+
+    parent = device.parent
+    if parent is not None and device.uplink_auto:
+        pmacs = _macs(parent)
+        peer = next((peers[m] for m in pmacs if m in peers), None)  # e.g. a station registered to its AP
+        if peer is not None:
+            device.local_port = peer.interface
+            device.uplink_type = device.uplink_type or "wireless"
+        else:
+            n = next((n for n in neighbors if (n.ip_address and n.ip_address == parent.ip_address)
+                      or (n.mac_address and n.mac_address in pmacs)), None)
+            if n is not None and n.interface:
+                device.local_port = n.interface
+                if not device.uplink_type:
+                    device.uplink_type = link_type(n.interface, False)
+
+
 class StatsPoller:
     def __init__(
         self,
@@ -242,5 +293,7 @@ class StatsPoller:
             if fingerprint and not device.ssh_host_key:
                 device.ssh_host_key = fingerprint
             store_stats(db, device, stats, utcnow())
+            db.flush()
+            detect_uplinks(db, device)
             db.commit()
             return ""

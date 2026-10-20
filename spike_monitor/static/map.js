@@ -13,6 +13,26 @@
   const label = (s) => (s || "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
+  const TYPE_LABEL = { wired: "Wired", wireless: "Wireless", fiber: "Fiber", mixed: "Mixed" };
+  const isDown = (st) => st === "down" || st === "unreachable";
+  // Wireless links are dashed, wired solid, fiber solid and thicker. Colour shows the status.
+  const linkStyle = (type) => (type === "wireless" ? [8, 6] : false);
+  const linkWidth = (type, status, base) => (isDown(status) ? base + 2 : base + (type === "fiber" ? 2 : 0));
+
+  function linkText(d) {
+    const ports = [d.uplink_port, d.local_port].filter(Boolean).join(" → ");
+    const sig = d.signal != null && d.uplink_type === "wireless" ? `${Math.round(d.signal)} dBm` : "";
+    return [ports, sig].filter(Boolean).join(" · ");
+  }
+
+  function linkTitle(d) {
+    const lines = [`${TYPE_LABEL[d.uplink_type] || "Connection type not set"} link`];
+    lines.push(`${d.parent_name}${d.uplink_port ? ` (${d.uplink_port})` : ""} → ${d.name}${d.local_port ? ` (${d.local_port})` : ""}`);
+    if (d.signal != null && d.uplink_type === "wireless") lines.push(`Signal: ${Math.round(d.signal)} dBm`);
+    lines.push(`Status: ${label(d.status)}`);
+    return lines.join("\n");
+  }
+
   let data = null;
   let view = "sites";
   let network = null;
@@ -60,13 +80,19 @@
         color: nodeColor(s.status, false), font: { color: TEXT, multi: false, size: 15 },
         x: s.x ?? undefined, y: s.y ?? undefined, title: s.devices.map((d) => `${d.name}: ${label(d.status)}`).join("\n"),
       }));
-      data.site_links.forEach((l) => e.push({
-        id: `l${l.from}-${l.to}`, from: `s${l.from}`, to: `s${l.to}`, width: Math.min(2 + l.count, 7),
-        color: { color: STATUS_COLOR[l.status] || STATUS_COLOR.unknown },
-        dashes: l.status === "down" || l.status === "unreachable",
-        label: l.signal != null ? `${Math.round(l.signal)} dBm` : "", font: { color: TEXT, strokeWidth: 3, strokeColor: C("--bg"), size: 12 },
-        title: `Links: ${l.label}`,
-      }));
+      data.site_links.forEach((l) => {
+        const first = l.links[0] || {};
+        const ports = l.count === 1 ? [first.parent_port, first.child_port].filter(Boolean).join(" → ") : `${l.count} links`;
+        const sig = l.signal != null && l.type !== "wired" && l.type !== "fiber" ? `${Math.round(l.signal)} dBm` : "";
+        e.push({
+          id: `l${l.from}-${l.to}`, from: `s${l.from}`, to: `s${l.to}`,
+          width: linkWidth(l.type, l.status, Math.min(2 + l.count, 6)),
+          color: { color: STATUS_COLOR[l.status] || STATUS_COLOR.unknown }, dashes: linkStyle(l.type),
+          label: [TYPE_LABEL[l.type], ports, sig].filter(Boolean).join(" · "),
+          font: { color: TEXT, strokeWidth: 3, strokeColor: C("--bg"), size: 12 },
+          title: l.links.map((k) => `${TYPE_LABEL[k.type] || "?"}: ${k.parent}${k.parent_port ? ` (${k.parent_port})` : ""} → ${k.child}${k.child_port ? ` (${k.child_port})` : ""}`).join("\n"),
+        });
+      });
       const upstreamSites = data.sites.filter((s) => s.upstream);
       if (upstreamSites.length) {
         n.push(internetNode());
@@ -87,10 +113,10 @@
                (d.clients != null ? `\nClients: ${d.clients}` : ""),
       }));
       shown.filter((d) => d.parent_id && ids.has(d.parent_id)).forEach((d) => e.push({
-        id: `e${d.id}`, from: d.parent_id, to: d.id, width: 2,
-        color: { color: STATUS_COLOR[d.status] || STATUS_COLOR.unknown },
-        dashes: d.status === "down" || d.status === "unreachable",
-        label: d.signal != null ? `${Math.round(d.signal)} dBm` : "", font: { color: TEXT, strokeWidth: 3, strokeColor: C("--bg"), size: 11 },
+        id: `e${d.id}`, from: d.parent_id, to: d.id, width: linkWidth(d.uplink_type, d.status, 2),
+        color: { color: STATUS_COLOR[d.status] || STATUS_COLOR.unknown }, dashes: linkStyle(d.uplink_type),
+        label: linkText(d), title: linkTitle(d),
+        font: { color: TEXT, strokeWidth: 3, strokeColor: C("--bg"), size: 11 },
       }));
       const upstream = shown.filter((d) => d.type === "upstream");
       if (upstream.length) {
@@ -186,9 +212,11 @@
       const b = byId[l.to];
       if (!a || !b) return;
       L.polyline([[a.lat, a.lon], [b.lat, b.lon]], {
-        color: STATUS_COLOR[l.status] || STATUS_COLOR.unknown, weight: Math.min(3 + l.count, 8),
-        dashArray: l.status === "down" || l.status === "unreachable" ? "8 8" : null, opacity: 0.85,
-      }).bindTooltip(`${esc(a.name)} → ${esc(b.name)}<br>${esc(l.label)}${l.signal != null ? `<br>Signal ${Math.round(l.signal)} dBm` : ""}`)
+        color: STATUS_COLOR[l.status] || STATUS_COLOR.unknown, weight: linkWidth(l.type, l.status, Math.min(3 + l.count, 7)),
+        dashArray: l.type === "wireless" ? "10 8" : null, opacity: 0.85,
+      }).bindTooltip(`<b>${esc(a.name)} → ${esc(b.name)}</b> (${esc(TYPE_LABEL[l.type] || "type not set")})<br>` +
+        l.links.map((k) => `${esc(k.parent)}${k.parent_port ? ` (${esc(k.parent_port)})` : ""} → ${esc(k.child)}${k.child_port ? ` (${esc(k.child_port)})` : ""}`).join("<br>") +
+        (l.signal != null && l.type === "wireless" ? `<br>Signal ${Math.round(l.signal)} dBm` : ""))
         .addTo(leaflet.layer);
     });
     placed.forEach((s) => {
@@ -244,7 +272,7 @@
     if (saveBtn) saveBtn.style.display = geo ? "none" : "";
     document.getElementById("map-hint").textContent = {
       sites: "Double-click a site to see its devices. Drag to arrange" + (window.SPIKE_CAN_EDIT ? ", then Save layout." : "."),
-      devices: "Double-click a device to open it. Lines show uplinks (parent device); labels show wireless signal.",
+      devices: "Double-click a device to open it. Labels show parent port → device port and wireless signal; hover a line for details.",
       geo: "Lines connect sites whose devices link to each other. Click a pin for details.",
     }[v];
     if (geo) drawGeo(); else drawTopology();

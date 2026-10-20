@@ -19,7 +19,8 @@ from .models import Role, User
 from .alerts.engine import AlertManager
 from .monitoring.engine import MonitorEngine
 from .monitoring.poller import StatsPoller
-from .routers import admin, alerts, auth, commands, dashboard, device_actions, devices, discovery, netmap
+from .routers import (admin, alerts, auth, commands, dashboard, device_actions, devices, discovery, history,
+                      netmap)
 from .routers.inventory import ALL_CRUDS
 from .security import SecretBox, hash_password
 
@@ -104,6 +105,7 @@ def create_app(cfg: Settings | None = None) -> FastAPI:
     app.include_router(discovery.router)
     app.include_router(netmap.router)
     app.include_router(alerts.router)
+    app.include_router(history.router)
     app.include_router(admin.router)
 
     @app.exception_handler(LoginRequired)

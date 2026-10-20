@@ -4,7 +4,7 @@
 <div class="panel">
   <div class="topbar" style="margin-bottom:10px">
     <span class="muted">Run RouterOS commands (or shell commands on Ubiquiti) on one or many devices over SSH. Admin only; every run is in the audit log.</span>
-    <a class="btn primary" href="/commands/new">+ New command</a>
+    <div class="actions">{% with kind="commands", what="all finished push-settings jobs and their output", device_id=None %}{% include "generic/_clear.html" %}{% endwith %}<a class="btn primary" href="/commands/new">+ New command</a></div>
   </div>
   <div class="table-wrap"><table>
     <thead><tr><th>#</th><th>When</th><th>By</th><th>Title</th><th>Devices</th><th>Result</th><th>Status</th></tr></thead>

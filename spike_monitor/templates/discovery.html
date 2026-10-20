@@ -2,6 +2,7 @@
 {% block heading %}Discovered devices{% endblock %}
 {% block content %}
 <div class="panel">
+  <div style="float:right">{% with kind="neighbors", what="the discovered devices list (it fills again on the next poll)", device_id=None, button="Clear list" %}{% include "generic/_clear.html" %}{% endwith %}</div>
   <p class="muted">Devices that your MikroTiks can see as neighbors (MNDP / CDP / LLDP) but that are not in the inventory yet. Refreshed every poll.</p>
   <div class="table-wrap"><table>
     <thead><tr><th>Identity</th><th>IP</th><th>MAC</th><th>Platform / board</th><th>Version</th><th>Seen by</th><th></th></tr></thead>

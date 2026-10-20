@@ -2,6 +2,7 @@
 {% block heading %}Audit log{% endblock %}
 {% block content %}
 <div class="panel">
+  <div class="topbar" style="margin-bottom:8px"><span class="muted">Every login and change. Clearing it leaves one entry saying who cleared it.</span>{% with kind="audit", what="the whole audit log", device_id=None %}{% include "generic/_clear.html" %}{% endwith %}</div>
   <div class="table-wrap"><table>
     <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Target</th><th>Details</th><th>From IP</th></tr></thead>
     <tbody>{% for r in rows %}<tr><td>{{ r.ts|dt }}</td><td>{{ r.username }}</td><td>{{ r.action }}</td><td>{{ r.target }}</td><td>{{ r.details }}</td><td>{{ r.ip }}</td></tr>

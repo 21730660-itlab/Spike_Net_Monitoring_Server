@@ -1,0 +1,9 @@
+{# Usage: {% with kind="audit", what="the audit log", device_id=None %}{% include "generic/_clear.html" %}{% endwith %} #}
+{% if user and user.role == Role.ADMIN %}
+<form class="inline" method="post" action="/history/clear/{{ kind }}"
+      data-countdown="Clear {{ what }}? This cannot be undone.">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+  {% if device_id %}<input type="hidden" name="device_id" value="{{ device_id }}">{% endif %}
+  <button class="btn small danger">🗑 {{ button|default("Clear history") }}</button>
+</form>
+{% endif %}

@@ -39,7 +39,7 @@
     {% endfor %}
     </tbody>
   </table></div>
-  {% if tab == 'history' %}<div class="actions" style="margin-top:12px">
+  {% if tab == 'history' %}<div class="actions" style="margin-top:12px">{% with kind="alerts", what="all closed alerts (open alerts stay)", device_id=None, button="Clear closed alerts" %}{% include "generic/_clear.html" %}{% endwith %}
     {% if page > 1 %}<a class="btn small" href="?tab=history&page={{ page - 1 }}">← Newer</a>{% endif %}
     {% if has_next %}<a class="btn small" href="?tab=history&page={{ page + 1 }}">Older →</a>{% endif %}
   </div>{% endif %}

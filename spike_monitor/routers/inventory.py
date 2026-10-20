@@ -13,6 +13,7 @@ from ..models import (
     Customer,
     Device,
     DeviceType,
+    LinkType,
     PortProfile,
     Role,
     Site,
@@ -192,9 +193,16 @@ def _validate_customer(db: Session, values: dict, obj) -> dict[str, str]:
     errors = {}
     if not _fk_exists(db, Site, values.get("site_id")):
         errors["site_id"] = "Unknown site."
-    if not _fk_exists(db, Device, values.get("access_point_id")):
+    ap = db.get(Device, values["access_point_id"]) if values.get("access_point_id") else None
+    if values.get("access_point_id") and ap is None:
         errors["access_point_id"] = "Unknown device."
+    elif ap is not None and values.get("site_id") and ap.site_id != values["site_id"]:
+        errors["access_point_id"] = "This device is not in the chosen site."
     return errors
+
+
+def device_sites(db: Session) -> dict[str, dict[str, str]]:
+    return {str(d.id): {"site": str(d.site_id or "")} for d in db.scalars(select(Device))}
 
 
 customers = Crud(
@@ -209,7 +217,8 @@ customers = Crud(
         Field("mac_address", "MAC address", kind="mac", required=True),
         Field("phone", "Phone"),
         Field("site_id", "Site", kind="select", options=site_options),
-        Field("access_point_id", "Access point", kind="select", options=device_options),
+        Field("access_point_id", "Access point / device", kind="select", options=device_options,
+              option_attrs=device_sites, help="Shows only the devices of the chosen site."),
         Field("notes", "Notes", kind="textarea"),
     ],
     columns=[
@@ -220,6 +229,7 @@ customers = Crud(
         ("Access point", lambda c: c.access_point.name if c.access_point else ""),
     ],
     validate=_validate_customer,
+    templates={"form_script": "customers/form_script.html"},
 )
 
 
@@ -283,10 +293,27 @@ DEVICE_FIELDS_REST = [
 ]
 
 
+COMMON_PORTS = ["ether1", "ether2", "ether3", "ether4", "ether5", "sfp1", "sfp-sfpplus1", "combo1",
+                "wlan1", "wlan2", "wifi1", "wifi2", "bridge", "eth0", "ath0", "br0"]
+UPLINK_FIELDS = ("uplink_type", "uplink_port", "local_port")
+
+
 def _device_extra_fields(db: Session, obj: Device | None) -> list[Field]:
     parent = Field("parent_id", "Parent device (uplink)", kind="select", options=_parent_options_for(obj),
-                   group="General", help="The device this one connects through. Used for the map and smart alerts.")
-    return [parent] + DEVICE_FIELDS_REST
+                   group="Connection", help="The device this one connects through. Used for the map and smart alerts.")
+    own_ports = [i.name for i in obj.interfaces] if obj else []
+    parent_ports = [i.name for i in obj.parent.interfaces] if obj and obj.parent else []
+    connection = [
+        Field("uplink_type", "Connected by", kind="select", group="Connection",
+              options=[(LinkType.WIRED, "Wired (cable)"), (LinkType.WIRELESS, "Wireless"), (LinkType.FIBER, "Fiber")],
+              help="Leave empty to detect it automatically from the parent MikroTik."),
+        Field("uplink_port", "Parent's port / interface", kind="combo", group="Connection",
+              placeholder="e.g. ether3 or wlan1", suggestions=parent_ports or COMMON_PORTS,
+              help="Where the cable or radio link plugs into the parent."),
+        Field("local_port", "This device's port / interface", kind="combo", group="Connection",
+              placeholder="e.g. ether1", suggestions=own_ports or COMMON_PORTS),
+    ]
+    return [parent] + connection + DEVICE_FIELDS_REST
 
 
 def _validate_device(db: Session, values: dict, obj: Device | None) -> dict[str, str]:
@@ -316,6 +343,17 @@ def _validate_device(db: Session, values: dict, obj: Device | None) -> dict[str,
 
 def _apply_device(db: Session, obj: Device, values: dict, box: SecretBox) -> None:
     skip = {"vlan_ids", "password", "clear_password", "port_profile_id"}
+    if values.get("parent_id") is None:
+        values.update(uplink_type="", uplink_port="", local_port="")
+    new_uplink = tuple((values.get(k) or "").strip() for k in UPLINK_FIELDS)
+    old_uplink = tuple((getattr(obj, k, None) or "") for k in UPLINK_FIELDS)
+    if obj.uplink_auto and obj.parent_id != values.get("parent_id") and new_uplink == old_uplink:
+        new_uplink = ("", "", "")  # detected ports belonged to the old parent
+    if not any(new_uplink):
+        obj.uplink_auto = True  # empty again: let detection fill it
+    elif new_uplink != old_uplink or obj.parent_id != values.get("parent_id"):
+        obj.uplink_auto = False  # set by hand: detection leaves it alone
+    obj.uplink_type, obj.uplink_port, obj.local_port = new_uplink
     for f in DEVICE_FIELDS_BASE + DEVICE_FIELDS_REST + [Field("parent_id", "")]:
         if f.name not in skip:
             setattr(obj, f.name, values.get(f.name))
@@ -337,7 +375,8 @@ def _apply_device(db: Session, obj: Device, values: dict, box: SecretBox) -> Non
 def _device_initial(d: Device) -> dict:
     values = {f.name: getattr(d, f.name, None) for f in DEVICE_FIELDS_BASE + DEVICE_FIELDS_REST}
     values.update(parent_id=d.parent_id, vlan_ids=[v.id for v in d.vlans], password="",
-                  clear_password=False, port_profile_id=None)
+                  clear_password=False, port_profile_id=None,
+                  uplink_type=d.uplink_type or None, uplink_port=d.uplink_port, local_port=d.local_port)
     return values
 
 
@@ -354,7 +393,7 @@ devices = Crud(
     apply=_apply_device,
     initial=_device_initial,
     detail_url=lambda d: f"/devices/{d.id}",
-    templates={"list": "devices/list.html"},
+    templates={"list": "devices/list.html", "form_script": "devices/form_script.html"},
 )
 
 ALL_CRUDS = [sites, vlans, credentials, ports, customers, devices]

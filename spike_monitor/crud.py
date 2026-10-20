@@ -68,6 +68,7 @@ class Crud:
                     "obj": obj,
                     "fields": fields,
                     "options": {f.name: f.resolve_options(db) for f in fields},
+                    "option_attrs": {f.name: f.option_attrs(db) for f in fields if f.option_attrs},
                     "values": values,
                     "errors": errors,
                 },
