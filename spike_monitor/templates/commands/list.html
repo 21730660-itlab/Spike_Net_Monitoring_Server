@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block heading %}Push settings{% endblock %}
+{% block content %}
+<div class="panel">
+  <div class="topbar" style="margin-bottom:10px">
+    <span class="muted">Run RouterOS commands (or shell commands on Ubiquiti) on one or many devices over SSH. Admin only; every run is in the audit log.</span>
+    <a class="btn primary" href="/commands/new">+ New command</a>
+  </div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>#</th><th>When</th><th>By</th><th>Title</th><th>Devices</th><th>Result</th><th>Status</th></tr></thead>
+    <tbody>{% for j in jobs %}
+      {% set ok = j.results|selectattr("status", "equalto", "ok")|list|length %}
+      {% set bad = j.results|selectattr("status", "in", ["error", "warning"])|list|length %}
+      <tr><td><a href="/commands/{{ j.id }}">{{ j.id }}</a></td><td>{{ j.created_at|dt }}</td><td>{{ j.username }}</td>
+        <td><a href="/commands/{{ j.id }}">{{ j.title or (j.script.splitlines()[0] if j.script else "") }}</a></td>
+        <td>{{ j.results|length }}</td><td><span class="pill up">{{ ok }} ok</span> {% if bad %}<span class="pill down">{{ bad }} failed</span>{% endif %}</td>
+        <td>{{ j.status|label }}</td></tr>
+    {% else %}<tr><td colspan="7" class="muted">No commands run yet.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</div>
+{% endblock %}

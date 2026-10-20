@@ -17,7 +17,8 @@ from .db import SessionLocal, init_engine
 from .deps import LoginRequired, PasswordChangeRequired, render
 from .models import Role, User
 from .monitoring.engine import MonitorEngine
-from .routers import admin, auth, dashboard, devices
+from .monitoring.poller import StatsPoller
+from .routers import admin, auth, commands, dashboard, device_actions, devices, discovery
 from .routers.inventory import ALL_CRUDS
 from .security import SecretBox, hash_password
 
@@ -56,11 +57,22 @@ def create_app(cfg: Settings | None = None) -> FastAPI:
         retention_days=cfg.raw_retention_days,
     )
 
+    poller = StatsPoller(
+        SessionLocal,
+        box,
+        interval=cfg.stats_interval,
+        concurrency=cfg.stats_concurrency,
+        raw_retention_days=cfg.raw_retention_days,
+        rollup_retention_days=cfg.rollup_retention_days,
+    )
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         if cfg.monitoring_enabled:
             engine.start()
+            poller.start()
         yield
+        await poller.stop()
         await engine.stop()
 
     app = FastAPI(title="Spike Net Monitoring Server", version=__version__, lifespan=lifespan,
@@ -68,6 +80,9 @@ def create_app(cfg: Settings | None = None) -> FastAPI:
     app.state.settings = cfg
     app.state.secret_box = box
     app.state.engine = engine
+    app.state.poller = poller
+    app.state.session_factory = SessionLocal
+    app.state.background_tasks = set()
 
     app.add_middleware(SessionMiddleware, secret_key=box.session_secret, session_cookie="spike_session",
                        max_age=12 * 3600, same_site="lax", https_only=False)
@@ -77,7 +92,11 @@ def create_app(cfg: Settings | None = None) -> FastAPI:
     app.include_router(dashboard.router)
     for crud in ALL_CRUDS:
         app.include_router(crud.build_router())
-    app.include_router(devices.router)  # after the generic device routes so /devices/new wins
+    # After the generic device routes so /devices/new wins over /devices/{id}
+    app.include_router(device_actions.router)
+    app.include_router(devices.router)
+    app.include_router(commands.router)
+    app.include_router(discovery.router)
     app.include_router(admin.router)
 
     @app.exception_handler(LoginRequired)

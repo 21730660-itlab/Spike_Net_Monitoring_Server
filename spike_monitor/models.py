@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Column,
     DateTime,
@@ -205,6 +206,23 @@ class Device(Base):
     last_latency_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
     last_loss_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
 
+    # Latest values read from the device (MikroTik API / Ubiquiti SSH)
+    identity: Mapped[str] = mapped_column(String(128), default="")
+    board_name: Mapped[str] = mapped_column(String(64), default="")
+    cpu_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    mem_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    temperature: Mapped[float | None] = mapped_column(Float, nullable=True)
+    voltage: Mapped[float | None] = mapped_column(Float, nullable=True)
+    uptime_s: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    wireless_clients: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    signal_dbm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    noise_dbm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ccq_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    last_polled: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    poll_error: Mapped[str] = mapped_column(Text, default="")
+    # SSH host key fingerprint, remembered on first connect (trust on first use)
+    ssh_host_key: Mapped[str] = mapped_column(String(128), default="")
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     site: Mapped[Site | None] = relationship(back_populates="devices")
@@ -212,6 +230,18 @@ class Device(Base):
     children: Mapped[list[Device]] = relationship(back_populates="parent")
     credential_profile: Mapped[CredentialProfile | None] = relationship()
     vlans: Mapped[list[Vlan]] = relationship(secondary=device_vlans)
+    interfaces: Mapped[list[DeviceInterface]] = relationship(
+        cascade="all, delete-orphan", order_by="DeviceInterface.name")
+    wireless_peers: Mapped[list[WirelessPeer]] = relationship(
+        cascade="all, delete-orphan", order_by="WirelessPeer.signal_dbm.desc()")
+
+    def login(self, box) -> tuple[str, str]:
+        """Username and decrypted password: device-specific first, then the profile."""
+        if self.username or self.password_enc:
+            return self.username, box.decrypt(self.password_enc)
+        if self.credential_profile is not None:
+            return self.credential_profile.username, box.decrypt(self.credential_profile.password_enc)
+        return "", ""
 
     def ancestors(self) -> list[Device]:
         """Parents up the chain, nearest first. Guards against loops."""
@@ -282,3 +312,147 @@ class AuditLog(Base):
     target: Mapped[str] = mapped_column(String(255), default="")
     details: Mapped[str] = mapped_column(Text, default="")
     ip: Mapped[str] = mapped_column(String(64), default="")
+
+
+class DeviceInterface(Base):
+    """Current state of one interface (refreshed on every poll)."""
+
+    __tablename__ = "device_interfaces"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    device_id: Mapped[int] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(64))
+    if_type: Mapped[str] = mapped_column(String(32), default="")
+    mac_address: Mapped[str] = mapped_column(String(32), default="")
+    comment: Mapped[str] = mapped_column(String(255), default="")
+    running: Mapped[bool] = mapped_column(Boolean, default=False)
+    disabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    rx_bps: Mapped[float | None] = mapped_column(Float, nullable=True)
+    tx_bps: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rx_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    tx_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class WirelessPeer(Base):
+    """A station connected to an AP (or the remote side of a link), refreshed on every poll."""
+
+    __tablename__ = "wireless_peers"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    device_id: Mapped[int] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"), index=True)
+    interface: Mapped[str] = mapped_column(String(64), default="")
+    mac_address: Mapped[str] = mapped_column(String(32), index=True)
+    name: Mapped[str] = mapped_column(String(128), default="")
+    last_ip: Mapped[str] = mapped_column(String(64), default="")
+    signal_dbm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ccq_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    tx_rate: Mapped[str] = mapped_column(String(64), default="")
+    rx_rate: Mapped[str] = mapped_column(String(64), default="")
+    uptime_s: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class MetricSample(Base):
+    """Raw device health sample, one per poll."""
+
+    __tablename__ = "metric_samples"
+    __table_args__ = (Index("ix_metric_device_ts", "device_id", "ts"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    device_id: Mapped[int] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"))
+    ts: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    cpu_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    mem_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    temperature: Mapped[float | None] = mapped_column(Float, nullable=True)
+    voltage: Mapped[float | None] = mapped_column(Float, nullable=True)
+    wireless_clients: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    signal_dbm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ccq_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
+class TrafficSample(Base):
+    """Raw interface traffic rate, one per interface per poll."""
+
+    __tablename__ = "traffic_samples"
+    __table_args__ = (Index("ix_traffic_device_if_ts", "device_id", "interface", "ts"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    device_id: Mapped[int] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"))
+    interface: Mapped[str] = mapped_column(String(64))
+    ts: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    rx_bps: Mapped[float] = mapped_column(Float)
+    tx_bps: Mapped[float] = mapped_column(Float)
+
+
+class HourlyRollup(Base):
+    """Hourly averages kept for a year, so long graphs stay fast.
+
+    ``series`` is e.g. "ping", "metrics" or "if:ether1". Unused value columns stay NULL.
+    """
+
+    __tablename__ = "hourly_rollups"
+    __table_args__ = (Index("ix_rollup_device_series_hour", "device_id", "series", "hour", unique=True),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    device_id: Mapped[int] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"))
+    series: Mapped[str] = mapped_column(String(80))
+    hour: Mapped[datetime] = mapped_column(DateTime)
+    v1: Mapped[float | None] = mapped_column(Float, nullable=True)
+    v2: Mapped[float | None] = mapped_column(Float, nullable=True)
+    v3: Mapped[float | None] = mapped_column(Float, nullable=True)
+    v4: Mapped[float | None] = mapped_column(Float, nullable=True)
+    v1_max: Mapped[float | None] = mapped_column(Float, nullable=True)
+    v2_max: Mapped[float | None] = mapped_column(Float, nullable=True)
+    samples: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class Neighbor(Base):
+    """A device seen by one of our MikroTiks (MNDP/CDP/LLDP), used to suggest new devices."""
+
+    __tablename__ = "neighbors"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    seen_by_id: Mapped[int] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"), index=True)
+    interface: Mapped[str] = mapped_column(String(64), default="")
+    ip_address: Mapped[str] = mapped_column(String(64), default="")
+    mac_address: Mapped[str] = mapped_column(String(32), default="")
+    identity: Mapped[str] = mapped_column(String(128), default="")
+    platform: Mapped[str] = mapped_column(String(64), default="")
+    board: Mapped[str] = mapped_column(String(64), default="")
+    version: Mapped[str] = mapped_column(String(64), default="")
+    last_seen: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    seen_by: Mapped[Device] = relationship()
+
+
+class CommandJob(Base):
+    """A script pushed to one or more devices over SSH."""
+
+    __tablename__ = "command_jobs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    username: Mapped[str] = mapped_column(String(64))
+    title: Mapped[str] = mapped_column(String(128), default="")
+    script: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(16), default="running")  # running, done
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    results: Mapped[list[CommandResult]] = relationship(
+        back_populates="job", cascade="all, delete-orphan", order_by="CommandResult.id")
+
+
+class CommandResult(Base):
+    __tablename__ = "command_results"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("command_jobs.id", ondelete="CASCADE"), index=True)
+    device_id: Mapped[int | None] = mapped_column(ForeignKey("devices.id", ondelete="SET NULL"), nullable=True)
+    device_name: Mapped[str] = mapped_column(String(128))
+    status: Mapped[str] = mapped_column(String(16), default="pending")  # pending, ok, error
+    output: Mapped[str] = mapped_column(Text, default="")
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    job: Mapped[CommandJob] = relationship(back_populates="results")
+    device: Mapped[Device | None] = relationship()

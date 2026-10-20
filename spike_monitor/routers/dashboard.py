@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from ..db import get_db
 from ..deps import local_time, render, require_viewer
-from ..models import Device, Site, Status, StatusEvent, User
+from ..models import Device, DeviceType, Site, Status, StatusEvent, User
 
 router = APIRouter()
 
@@ -16,7 +16,7 @@ PROBLEM_STATUSES = (Status.DOWN, Status.UNREACHABLE, Status.WARNING)
 
 
 def build_summary(db: Session, engine) -> dict:
-    devices = db.scalars(select(Device).options(selectinload(Device.site))).all()
+    devices = db.scalars(select(Device).options(selectinload(Device.site), selectinload(Device.interfaces))).all()
     counts = Counter(d.status for d in devices)
     per_site: dict[str, Counter] = {}
     for d in devices:
@@ -44,6 +44,19 @@ def build_summary(db: Session, engine) -> dict:
                 "loss": d.last_loss_pct,
             }
             for d in problems
+        ],
+        "upstream": [
+            {
+                "id": d.id,
+                "name": d.name,
+                "status": d.status,
+                "latency": d.last_latency_ms,
+                "loss": d.last_loss_pct,
+                "signal": d.signal_dbm,
+                "rx": max((i.rx_bps or 0 for i in d.interfaces if i.running), default=None),
+                "tx": max((i.tx_bps or 0 for i in d.interfaces if i.running), default=None),
+            }
+            for d in devices if d.device_type == DeviceType.UPSTREAM
         ],
         "engine": {
             "last_cycle_at": local_time(engine.last_cycle_at) if engine and engine.last_cycle_at else None,

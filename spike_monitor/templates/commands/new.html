@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block heading %}Push settings: new command{% endblock %}
+{% block content %}
+<form method="post" action="/commands/preview">
+<input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+{% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+<div class="grid two">
+  <div class="panel">
+    <h2>1. Commands</h2>
+    <p><label>Title (optional)</label><input type="text" name="title" value="{{ title }}" placeholder="e.g. Update DNS servers"></p>
+    <p><label>Commands to run</label>
+      <textarea name="script" id="script" style="min-height:220px;font-family:Consolas,monospace">{{ script }}</textarea>
+      <span class="help">One command per line, exactly as you would type in the MikroTik terminal (or a shell on Ubiquiti). You will see a preview before anything runs.</span></p>
+    <p class="muted" style="margin-bottom:6px">Examples (click to insert):</p>
+    <div class="actions">{% for label, text in snippets %}<button type="button" class="btn small" data-snippet="{{ text }}">{{ label }}</button>{% endfor %}</div>
+  </div>
+  <div class="panel">
+    <h2>2. Devices</h2>
+    <div class="filters">
+      <input type="text" id="dq" placeholder="Filter by name, IP, site…">
+      <button type="button" class="btn small" id="sel-all">Select visible</button>
+      <button type="button" class="btn small" id="sel-none">Clear</button>
+    </div>
+    <div style="max-height:420px;overflow:auto">
+    <table id="dtable"><tbody>
+      {% for d in devices %}
+      <tr data-text="{{ (d.name ~ ' ' ~ d.ip_address ~ ' ' ~ (d.site.name if d.site else '') ~ ' ' ~ d.brand)|lower }}">
+        <td style="width:30px"><input type="checkbox" name="device_ids" value="{{ d.id }}" {{ 'checked' if d.id in selected }} id="d{{ d.id }}"></td>
+        <td><label for="d{{ d.id }}" style="font-weight:500;margin:0">{{ d.name }}</label> <span class="muted">{{ d.ip_address }}</span></td>
+        <td class="muted">{{ d.site.name if d.site else "" }}</td><td class="muted">{{ d.brand|label }}</td>
+        <td>{% if not d.use_ssh %}<span class="pill paused">SSH off</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody></table>
+    </div>
+  </div>
+</div>
+<button class="btn primary">Preview →</button>
+</form>
+{% endblock %}
+{% block scripts %}<script>
+document.querySelectorAll("[data-snippet]").forEach(b => b.addEventListener("click", () => {
+  const t = document.getElementById("script"); t.value = (t.value ? t.value.replace(/\s*$/, "\n") : "") + b.dataset.snippet; t.focus();
+}));
+const rows = [...document.querySelectorAll("#dtable tr")];
+document.getElementById("dq").addEventListener("input", e => { const q = e.target.value.toLowerCase();
+  rows.forEach(r => r.style.display = r.dataset.text.includes(q) ? "" : "none"); });
+document.getElementById("sel-all").addEventListener("click", () => rows.forEach(r => { if (r.style.display !== "none") r.querySelector("input").checked = true; }));
+document.getElementById("sel-none").addEventListener("click", () => rows.forEach(r => r.querySelector("input").checked = false));
+</script>{% endblock %}

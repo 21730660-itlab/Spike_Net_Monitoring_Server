@@ -27,7 +27,7 @@ Windows PC 24/7; the team uses it from a browser on any PC or phone.
 
 ## Phases
 
-### Phase 1: done in this commit
+### Phase 1: done
 - Login, roles, forced password change, brute-force lockout, CSRF protection, audit log.
 - Sites, VLANs, credential profiles, port profiles, customers (MAC list), devices.
 - Per-device ports (Winbox, SSH, API, API-SSL, HTTP, HTTPS) and port profiles.
@@ -39,15 +39,22 @@ Windows PC 24/7; the team uses it from a browser on any PC or phone.
 - Down debounce (2 failed cycles), raw ping history kept 7 days.
 - Dashboard (live refresh), device list with filters, device page with latency/loss graph.
 
-### Phase 2: device data
-- MikroTik RouterOS API (v6 + v7) and SSH: CPU, RAM, temperature, voltage, uptime,
-  interfaces and traffic, wireless signal / CCQ / noise / rates / registered clients.
-- **Import from device**: identity, model, serial, version, interfaces, IPs, VLANs, bridges,
-  wireless settings, neighbors (suggested as new devices).
-- **Push settings to devices**: run a command/script on one or many MikroTik devices,
-  with preview, confirmation, per-device result and audit log.
-- Ubiquiti airOS: status (signal, CCQ, capacity, stations) via SSH / web.
-- Traffic and wireless graphs; upstream link quality view.
+### Phase 2: done
+- MikroTik RouterOS API (v6 incl. pre-6.43 login, and v7; plain API or API-SSL):
+  CPU, RAM, temperature, voltage, uptime, interfaces with traffic rates, wireless
+  registration table (legacy wireless, wifi, wifiwave2): signal, noise, CCQ, rates, clients.
+- Ubiquiti airOS over SSH (`mca-status` + `wstalist`): CPU, RAM, signal, noise, CCQ, stations, traffic.
+- Poller every 60 s (20 devices in parallel); devices that are down by ping are skipped.
+- **Import from device**: identity, model, serial, version, MAC, VLANs (created and linked),
+  IP addresses, bridges, wireless settings, interfaces, neighbors with one-click "Add".
+- **Discovered devices** page: MNDP/CDP/LLDP neighbors not in the inventory yet.
+- **Push settings** (admin only): commands to one or many devices over SSH, preview +
+  confirmation, per-device output, RouterOS error detection, retry failed, audit log.
+- SSH host keys remembered on first use; a changed key blocks the connection until an admin resets it.
+- Graphs: traffic per interface, CPU / memory / temperature / clients; hourly averages kept
+  for a year (raw samples 7 days), graph ranges up to 1 year.
+- Wireless clients matched to the Customers list by MAC.
+- Upstream ISP panel on the dashboard (devices of type "Upstream").
 
 ### Phase 3: alerts
 - Alert rules: down/up, latency, loss, weak signal, high CPU/temperature, loop detected.

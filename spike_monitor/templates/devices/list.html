@@ -24,7 +24,7 @@
     {% endif %}
   </div>
   <div class="table-wrap"><table id="devices">
-    <thead><tr><th>Status</th><th>Name</th><th>IP</th><th>Brand</th><th>Type</th><th>Site</th><th>Parent</th><th>Latency</th><th>Loss</th><th>Last seen</th></tr></thead>
+    <thead><tr><th>Status</th><th>Name</th><th>IP</th><th>Brand</th><th>Type</th><th>Site</th><th>Parent</th><th>Latency</th><th>Loss</th><th>CPU</th><th>Clients</th><th>Last seen</th></tr></thead>
     <tbody>
     {% for d in items %}
       <tr data-id="{{ d.id }}" data-site="{{ d.site.name if d.site else '' }}" data-status="{{ d.status }}" data-brand="{{ d.brand }}"
@@ -38,10 +38,12 @@
         <td>{{ d.parent.name if d.parent else "" }}</td>
         <td class="lat">{{ "%.1f ms"|format(d.last_latency_ms) if d.last_latency_ms is not none else "—" }}</td>
         <td class="loss">{{ "%.0f%%"|format(d.last_loss_pct) if d.last_loss_pct is not none else "—" }}</td>
+        <td>{{ "%.0f%%"|format(d.cpu_pct) if d.cpu_pct is not none else "—" }}{% if d.poll_error %} <span title="{{ d.poll_error }}">⚠️</span>{% endif %}</td>
+        <td>{{ d.wireless_clients if d.wireless_clients is not none else "—" }}</td>
         <td class="seen">{{ d.last_seen|dt }}</td>
       </tr>
     {% else %}
-      <tr><td colspan="10" class="muted">No devices yet. Add one, or import a CSV file.</td></tr>
+      <tr><td colspan="12" class="muted">No devices yet. Add one, or import a CSV file.</td></tr>
     {% endfor %}
     </tbody>
   </table></div>

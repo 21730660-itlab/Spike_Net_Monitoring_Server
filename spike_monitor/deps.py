@@ -8,6 +8,7 @@ from fastapi import Depends, HTTPException, Request
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
+from .collectors.common import format_bps, format_uptime
 from .db import get_db
 from .models import AuditLog, Role, Status, User
 from .security import SecretBox, csrf_token
@@ -28,6 +29,8 @@ def _label(value: str | None) -> str:
 
 templates.env.filters["dt"] = local_time
 templates.env.filters["label"] = _label
+templates.env.filters["uptime"] = format_uptime
+templates.env.filters["bps"] = format_bps
 templates.env.globals["csrf_token"] = csrf_token
 templates.env.globals["Role"] = Role
 templates.env.globals["Status"] = Status

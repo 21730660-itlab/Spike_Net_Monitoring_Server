@@ -121,7 +121,12 @@ class Crud:
 
         @router.get("/new")
         def new_page(request: Request, db: Session = Depends(get_db), user: User = Depends(editor)):
-            values = {f.name: f.default for f in crud.form_fields(db, None)}
+            fields = crud.form_fields(db, None)
+            values = {f.name: f.default for f in fields}
+            # Pre-fill from the link, e.g. "Add as device" on the discovery page.
+            for f in fields:
+                if f.name in request.query_params and f.kind not in ("password", "multiselect", "bool"):
+                    values[f.name] = request.query_params[f.name][:255]
             return _form_page(request, db, None, values, {})
 
         @router.post("/new", dependencies=[Depends(verify_csrf)])

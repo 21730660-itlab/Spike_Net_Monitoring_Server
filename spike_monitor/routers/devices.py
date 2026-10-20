@@ -17,6 +17,7 @@ from ..models import (
     DEFAULT_PORTS,
     Brand,
     CredentialProfile,
+    Customer,
     Device,
     DeviceType,
     PingResult,
@@ -25,6 +26,7 @@ from ..models import (
     User,
     utcnow,
 )
+from ..monitoring.poller import can_poll
 from ..security import verify_csrf
 
 router = APIRouter(prefix="/devices")
@@ -176,21 +178,8 @@ def device_detail(device_id: int, request: Request, db: Session = Depends(get_db
         "avg_latency_24h": avg,
         "has_password": bool(device.password_enc or (device.credential_profile and device.credential_profile.password_enc)),
         "login_user": device.username or (device.credential_profile.username if device.credential_profile else ""),
+        "customers_by_mac": {c.mac_address: c for c in db.scalars(
+            select(Customer).where(Customer.mac_address.in_([p.mac_address for p in device.wireless_peers])))},
+        "can_poll": can_poll(device),
     })
 
-
-@router.get("/{device_id}/history")
-def device_history(device_id: int, hours: int = 24, db: Session = Depends(get_db),
-                   user: User = Depends(require_viewer)):
-    hours = max(1, min(hours, 24 * 7))
-    since = utcnow() - timedelta(hours=hours)
-    rows = db.execute(
-        select(PingResult.ts, PingResult.avg_ms, PingResult.loss_pct)
-        .where(PingResult.device_id == device_id, PingResult.ts >= since)
-        .order_by(PingResult.ts)
-    ).all()
-    return {
-        "ts": [r.ts.isoformat() for r in rows],
-        "latency": [r.avg_ms for r in rows],
-        "loss": [r.loss_pct for r in rows],
-    }

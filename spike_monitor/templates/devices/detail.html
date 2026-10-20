@@ -6,6 +6,13 @@
   <a class="btn" href="/devices">← All devices</a>
   {% if user.has_role(Role.TECHNICIAN) %}
   <a class="btn primary" href="/devices/{{ device.id }}/edit">Edit</a>
+  {% if can_poll %}
+  <form class="inline" method="post" action="/devices/{{ device.id }}/poll">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><button class="btn">⟳ Read now</button>
+  </form>
+  <a class="btn" href="/devices/{{ device.id }}/import">📥 Import from device</a>
+  {% endif %}
+  {% if user.role == Role.ADMIN and device.use_ssh %}<a class="btn" href="/commands/new?device={{ device.id }}">📤 Run command</a>{% endif %}
   <form class="inline" method="post" action="/devices/{{ device.id }}/delete" onsubmit="return confirm('Delete {{ device.name }}?')">
     <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><button class="btn danger">Delete</button>
   </form>
@@ -19,12 +26,67 @@
   <div class="card total"><div class="num">{{ "%.1f"|format(avg_latency_24h) if avg_latency_24h is not none else "—" }}</div><div class="lbl">Avg latency 24h (ms)</div></div>
 </div>
 
+{% if device.poll_error %}<div class="flash error"><b>Could not read device data:</b> {{ device.poll_error }}</div>{% endif %}
+{% if device.last_polled and not device.poll_error or device.cpu_pct is not none %}
+<div class="grid cards" style="margin-bottom:18px">
+  <div class="card {{ 'down' if (device.cpu_pct or 0) >= 85 else 'up' }}"><div class="num">{{ "%.0f"|format(device.cpu_pct) if device.cpu_pct is not none else "—" }}%</div><div class="lbl">CPU</div></div>
+  <div class="card {{ 'down' if (device.mem_pct or 0) >= 90 else 'up' }}"><div class="num">{{ "%.0f"|format(device.mem_pct) if device.mem_pct is not none else "—" }}%</div><div class="lbl">Memory used</div></div>
+  <div class="card {{ 'down' if (device.temperature or 0) >= 70 else 'up' }}"><div class="num">{{ "%.0f"|format(device.temperature) if device.temperature is not none else "—" }}°</div><div class="lbl">Temperature (°C)</div></div>
+  <div class="card total"><div class="num">{{ "%.1f"|format(device.voltage) if device.voltage is not none else "—" }}</div><div class="lbl">Voltage (V)</div></div>
+  <div class="card total"><div class="num" style="font-size:1.4rem;padding:6px 0">{{ device.uptime_s|uptime }}</div><div class="lbl">Uptime</div></div>
+  {% if device.wireless_clients is not none %}<div class="card total"><div class="num">{{ device.wireless_clients }}</div><div class="lbl">Wireless clients</div></div>{% endif %}
+  {% if device.signal_dbm is not none %}<div class="card {{ 'down' if device.signal_dbm < -75 else ('warning' if device.signal_dbm < -65 else 'up') }}"><div class="num">{{ "%.0f"|format(device.signal_dbm) }}</div><div class="lbl">{{ "Avg signal" if (device.wireless_clients or 0) > 1 else "Signal" }} (dBm){% if device.ccq_pct is not none %} · CCQ {{ "%.0f"|format(device.ccq_pct) }}%{% endif %}</div></div>{% endif %}
+</div>
+{% endif %}
+
 <div class="panel">
   <div class="topbar" style="margin-bottom:8px"><h2 style="margin:0">Latency &amp; packet loss</h2>
-    <select id="range" style="width:auto"><option value="1">1 hour</option><option value="6">6 hours</option><option value="24" selected>24 hours</option><option value="168">7 days</option></select>
+    <select id="range" style="width:auto"><option value="1">1 hour</option><option value="6">6 hours</option><option value="24" selected>24 hours</option><option value="168">7 days</option><option value="720">30 days</option><option value="8760">1 year</option></select>
   </div>
   <div class="chart-box"><canvas id="chart"></canvas></div>
 </div>
+
+{% if device.interfaces %}
+<div class="grid two">
+  <div class="panel">
+    <div class="topbar" style="margin-bottom:8px"><h2 style="margin:0">Traffic</h2>
+      <select id="iface" style="width:auto">{% for i in device.interfaces if i.running %}<option>{{ i.name }}</option>{% endfor %}</select>
+    </div>
+    <div class="chart-box"><canvas id="traffic"></canvas></div>
+  </div>
+  <div class="panel">
+    <h2>Health</h2>
+    <div class="chart-box"><canvas id="health"></canvas></div>
+  </div>
+</div>
+
+<div class="panel"><h2>Interfaces</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Name</th><th>Type</th><th>State</th><th>Download (rx)</th><th>Upload (tx)</th><th>MAC</th><th>Comment</th></tr></thead>
+    <tbody>{% for i in device.interfaces %}
+      <tr><td>{{ i.name }}</td><td>{{ i.if_type }}</td>
+        <td>{% if i.disabled %}<span class="pill paused">Disabled</span>{% elif i.running %}<span class="pill up">Running</span>{% else %}<span class="pill down">Not running</span>{% endif %}</td>
+        <td>{{ i.rx_bps|bps }}</td><td>{{ i.tx_bps|bps }}</td><td class="muted">{{ i.mac_address }}</td><td class="muted">{{ i.comment }}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  <p class="muted">Updated {{ device.last_polled|dt }}</p>
+</div>
+{% endif %}
+
+{% if device.wireless_peers %}
+<div class="panel"><h2>Wireless clients / links ({{ device.wireless_peers|length }})</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Signal</th><th>Customer / name</th><th>MAC</th><th>IP</th><th>CCQ</th><th>TX / RX rate</th><th>Connected</th><th>Interface</th></tr></thead>
+    <tbody>{% for p in device.wireless_peers %}{% set c = customers_by_mac.get(p.mac_address) %}
+      <tr><td><span class="pill {{ 'down' if (p.signal_dbm or -100) < -75 else ('warning' if (p.signal_dbm or -100) < -65 else 'up') }}">{{ "%.0f dBm"|format(p.signal_dbm) if p.signal_dbm is not none else "?" }}</span></td>
+        <td>{% if c %}<b>{{ c.name }}</b>{% if p.name %} <span class="muted">({{ p.name }})</span>{% endif %}{% else %}{{ p.name or "—" }}{% endif %}</td>
+        <td>{{ p.mac_address }}</td><td>{{ p.last_ip or "—" }}</td><td>{{ "%.0f%%"|format(p.ccq_pct) if p.ccq_pct is not none else "—" }}</td>
+        <td class="muted">{{ p.tx_rate or "—" }} / {{ p.rx_rate or "—" }}</td><td>{{ p.uptime_s|uptime }}</td><td class="muted">{{ p.interface }}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  <p class="muted">Names in bold come from your Customers list (matched by MAC).</p>
+</div>
+{% endif %}
 
 <div class="grid two">
   <div class="panel"><h2>Device</h2>
@@ -52,8 +114,14 @@
       <dt>SSH</dt><dd>{{ device.ssh_port }} {{ "" if device.use_ssh else "(disabled)" }}</dd>
       <dt>API / API-SSL</dt><dd>{{ device.api_port }} / {{ device.api_ssl_port }} {% if not device.use_api %}(disabled){% elif device.use_api_ssl %}(using SSL){% endif %}</dd>
       <dt>HTTP / HTTPS</dt><dd>{{ device.http_port }} / {{ device.https_port }}</dd>
+      <dt>Last read</dt><dd>{{ device.last_polled|dt }}</dd>
+      <dt>SSH host key</dt><dd>{% if device.ssh_host_key %}<span class="muted" style="font-size:.8rem">{{ device.ssh_host_key }}</span>
+        {% if user.role == Role.ADMIN %}<form class="inline" method="post" action="/devices/{{ device.id }}/forget-ssh-key" onsubmit="return confirm('Forget the saved SSH key?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><button class="btn small">Forget SSH key</button></form>{% endif %}
+        {% else %}—{% endif %}</dd>
     </dl>
-    <p class="muted">Open in Winbox, SSH console, Import from device and Backups arrive in the next phases.</p>
+    {% if not can_poll %}<p class="muted">{% if device.brand in ("mikrotik", "ubiquiti") %}Turn on {{ "the RouterOS API" if device.brand == "mikrotik" else "SSH" }} for this device to read CPU, traffic and wireless data.{% else %}Reading data from {{ device.brand|label }} devices comes in a later phase; ping monitoring works now.{% endif %}</p>{% endif %}
+    <p class="muted">Open in Winbox / SSH and Backups arrive in phase 4.</p>
   </div>
 </div>
 
@@ -68,5 +136,5 @@
 {% block scripts %}
 <script src="/static/vendor/chart.umd.js"></script>
 <script src="/static/app.js"></script>
-<script>SpikeUI.deviceChart({{ device.id }});</script>
+<script>SpikeUI.deviceChart({{ device.id }});{% if device.interfaces %}SpikeUI.deviceStats({{ device.id }});{% endif %}</script>
 {% endblock %}

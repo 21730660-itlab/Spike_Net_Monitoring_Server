@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block heading %}Import from {{ device.name }}{% endblock %}
+{% block content %}
+<form method="post" action="/devices/{{ device.id }}/import">
+<input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+<div class="panel">
+  <h2>Device details</h2>
+  {% if changes %}
+  <p class="muted">Tick what you want to copy into the app.</p>
+  <table><thead><tr><th></th><th>Field</th><th>In the app now</th><th>On the device</th></tr></thead><tbody>
+    {% for c in changes %}<tr><td><input type="checkbox" name="apply_{{ c.field }}" checked><input type="hidden" name="value_{{ c.field }}" value="{{ c.new }}"></td>
+      <td>{{ c.label }}</td><td class="muted">{{ c.old or "—" }}</td><td><b>{{ c.new }}</b></td></tr>{% endfor %}
+  </tbody></table>
+  {% else %}<p>✅ The app already matches the device.</p>{% endif %}
+</div>
+
+<div class="panel"><h2>VLANs on the device</h2>
+  {% if vlans %}<table><thead><tr><th></th><th>VLAN ID</th><th>Name</th><th>On interface</th><th></th></tr></thead><tbody>
+    {% for v in vlans %}<tr><td>{% if not v.attached %}<input type="checkbox" name="vlan" value="{{ v.vlan_id }}:{{ v.name }}" checked>{% endif %}</td>
+      <td>{{ v.vlan_id }}</td><td>{{ v.name }}</td><td>{{ v.interface }}</td>
+      <td class="muted">{% if v.attached %}already linked{% elif v.exists %}exists, will be linked{% else %}will be created and linked{% endif %}</td></tr>{% endfor %}
+  </tbody></table>{% else %}<p class="muted">No VLAN interfaces on this device.</p>{% endif %}
+</div>
+
+<div class="grid two">
+  <div class="panel"><h2>IP addresses</h2>
+    <table><tbody>{% for a in inv.ip_addresses %}<tr><td>{{ a.address }}</td><td class="muted">{{ a.interface }}</td></tr>{% else %}<tr><td class="muted">None</td></tr>{% endfor %}</tbody></table></div>
+  <div class="panel"><h2>Wireless</h2>
+    <table><tbody>{% for w in inv.wireless %}<tr><td>{{ w.name }}</td><td>{{ w.ssid }}</td><td class="muted">{{ w.mode }} {{ w.frequency }} {{ w.band }}</td></tr>{% else %}<tr><td class="muted">None</td></tr>{% endfor %}</tbody></table>
+    {% if inv.bridges %}<p class="muted">Bridges: {{ inv.bridges|join(", ") }}</p>{% endif %}</div>
+</div>
+
+<div class="panel"><h2>Interfaces ({{ inv.interfaces|length }})</h2>
+  <div class="table-wrap"><table><thead><tr><th>Name</th><th>Type</th><th>MAC</th><th>Running</th><th>Comment</th></tr></thead><tbody>
+  {% for i in inv.interfaces %}<tr><td>{{ i.name }}</td><td>{{ i.if_type }}</td><td>{{ i.mac_address }}</td><td>{{ "yes" if i.running else "no" }}{{ " (disabled)" if i.disabled }}</td><td>{{ i.comment }}</td></tr>{% endfor %}
+  </tbody></table></div>
+</div>
+
+{% if neighbors %}
+<div class="panel"><h2>Neighbors not in the app yet ({{ neighbors|length }})</h2>
+  <table><thead><tr><th>Identity</th><th>IP</th><th>MAC</th><th>Board</th><th></th></tr></thead><tbody>
+  {% for n in neighbors %}<tr><td>{{ n.identity }}</td><td>{{ n.ip_address }}</td><td>{{ n.mac_address }}</td><td>{{ n.platform }} {{ n.board }}</td>
+    <td>{% if n.ip_address %}<a class="btn small" target="_blank" href="/devices/new?name={{ n.identity|urlencode }}&ip_address={{ n.ip_address|urlencode }}&mac_address={{ n.mac_address|urlencode }}&model={{ n.board|urlencode }}&parent_id={{ device.id }}{% if device.site_id %}&site_id={{ device.site_id }}{% endif %}">Add</a>{% endif %}</td></tr>{% endfor %}
+  </tbody></table></div>
+{% endif %}
+
+<div class="actions"><button class="btn primary">Import selected</button><a class="btn" href="/devices/{{ device.id }}">Cancel</a></div>
+</form>
+{% endblock %}

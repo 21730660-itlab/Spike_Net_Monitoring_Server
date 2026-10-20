@@ -5,7 +5,7 @@ It runs on one Windows PC and your team opens it in a browser from any PC or pho
 
 See [docs/DESIGN.md](docs/DESIGN.md) for the full requirements and the phase plan.
 
-## What works now (phase 1)
+## What works now (phases 1 and 2)
 
 - Users with roles (Admin / Technician / Viewer), audit log
 - Sites, VLANs, customers (MAC list), credential profiles, port profiles
@@ -14,6 +14,31 @@ See [docs/DESIGN.md](docs/DESIGN.md) for the full requirements and the phase pla
 - Ping monitoring of every device: latency, packet loss, up / degraded / down
 - Parent-aware status: if a tower is down, the devices behind it show **unreachable**
 - Live dashboard, device list with filters, latency/loss graph per device
+- MikroTik (RouterOS v6 and v7, API) and Ubiquiti airOS (SSH): CPU, memory, temperature, voltage,
+  uptime, interface traffic, wireless clients with signal / CCQ, matched to your customers by MAC
+- Import from device (identity, model, serial, version, VLANs, IPs, wireless, neighbors)
+- Discovered devices: neighbors your MikroTiks see that are not in the app yet
+- Push settings (admin): run commands on one or many devices over SSH, with preview and per-device results
+- Traffic / health graphs up to 1 year
+
+## Preparing your devices
+
+**MikroTik**: the API service must be on and reachable from the server PC:
+
+```
+/ip service set api disabled=no port=8728 address=<server-PC-IP>/32
+```
+
+For monitoring only, a read-only user is enough:
+
+```
+/user add name=monitor group=read password=<strong password>
+```
+
+Push settings logs in over SSH and needs a user in the `write` or `full` group.
+If you changed the API, SSH or Winbox port, set it on the device in the app (or use a port profile).
+
+**Ubiquiti airOS**: SSH must be on (System → Services → SSH Server). Use the device's admin login.
 
 ## Install on Windows
 
@@ -48,7 +73,11 @@ Set environment variables before starting (for example in `run.bat`):
 | `SPIKE_PING_COUNT` | `3` | Pings per device per round |
 | `SPIKE_PING_TIMEOUT` | `1.0` | Seconds to wait for each reply |
 | `SPIKE_PING_CONCURRENCY` | `100` | Devices pinged in parallel |
-| `SPIKE_RAW_RETENTION_DAYS` | `7` | How long raw ping results are kept |
+| `SPIKE_RAW_RETENTION_DAYS` | `7` | How long raw samples (ping, CPU, traffic) are kept |
+| `SPIKE_STATS_INTERVAL` | `60` | Seconds between reads of device data (API / SSH) |
+| `SPIKE_STATS_CONCURRENCY` | `20` | Devices read in parallel |
+| `SPIKE_ROLLUP_RETENTION_DAYS` | `365` | How long hourly averages are kept |
+| `SPIKE_COMMAND_CONCURRENCY` | `10` | Devices a pushed command runs on at the same time |
 | `SPIKE_BOOTSTRAP_ADMIN_KEY` | `admin@2026` | First admin password (used only when there are no users) |
 
 ## CSV import

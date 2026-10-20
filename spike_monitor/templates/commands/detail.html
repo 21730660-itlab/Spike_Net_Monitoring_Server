@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block head %}{% if job.status == "running" %}<meta http-equiv="refresh" content="3">{% endif %}{% endblock %}
+{% block heading %}Command #{{ job.id }} <span class="pill {{ 'warning' if job.status == 'running' else 'up' }}">{{ job.status|label }}</span>{% endblock %}
+{% block content %}
+<div class="panel">
+  <p class="muted">{{ job.created_at|dt }} by {{ job.username }}{% if job.finished_at %} · finished {{ job.finished_at|dt }}{% endif %}</p>
+  {% if job.title %}<p><b>{{ job.title }}</b></p>{% endif %}
+  <pre style="background:var(--bg);padding:12px;border-radius:8px;overflow:auto;border:1px solid var(--border)">{{ job.script }}</pre>
+  <div class="actions"><a class="btn" href="/commands">← All commands</a>
+    <form class="inline" method="post" action="/commands/preview"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+      <textarea name="script" hidden>{{ job.script }}</textarea><input type="hidden" name="title" value="{{ job.title }}">
+      {% for r in job.results if r.status != "ok" and r.device_id %}<input type="hidden" name="device_ids" value="{{ r.device_id }}">{% endfor %}
+      {% if job.status == "done" and job.results|rejectattr("status", "equalto", "ok")|list %}<button class="btn">Retry failed devices</button>{% endif %}
+    </form>
+  </div>
+</div>
+{% for r in job.results %}
+<div class="panel">
+  <h2><span class="pill {{ {'ok': 'up', 'warning': 'warning', 'error': 'down'}.get(r.status, 'unknown') }}">{{ r.status|label }}</span>
+    {% if r.device_id %}<a href="/devices/{{ r.device_id }}">{{ r.device_name }}</a>{% else %}{{ r.device_name }}{% endif %}</h2>
+  {% if r.output %}<pre style="background:var(--bg);padding:12px;border-radius:8px;overflow:auto;max-height:400px;border:1px solid var(--border);margin:0">{{ r.output }}</pre>
+  {% else %}<p class="muted">Waiting…</p>{% endif %}
+</div>
+{% endfor %}
+{% endblock %}

@@ -38,6 +38,11 @@ class Settings:
     ping_timeout: float = field(default_factory=lambda: float(_env("PING_TIMEOUT", "1.0")))
     ping_concurrency: int = field(default_factory=lambda: int(_env("PING_CONCURRENCY", "100")))
     raw_retention_days: int = field(default_factory=lambda: int(_env("RAW_RETENTION_DAYS", "7")))
+    # Device data (MikroTik API / Ubiquiti SSH)
+    stats_interval: int = field(default_factory=lambda: int(_env("STATS_INTERVAL", "60")))
+    stats_concurrency: int = field(default_factory=lambda: int(_env("STATS_CONCURRENCY", "20")))
+    rollup_retention_days: int = field(default_factory=lambda: int(_env("ROLLUP_RETENTION_DAYS", "365")))
+    command_concurrency: int = field(default_factory=lambda: int(_env("COMMAND_CONCURRENCY", "10")))
     monitoring_enabled: bool = field(
         default_factory=lambda: _env("MONITORING_ENABLED", "1") not in ("0", "false", "no")
     )

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block heading %}Push settings: confirm{% endblock %}
+{% block content %}
+<div class="panel">
+  <div class="flash error">⚠️ These commands will change the configuration of <b>{{ ready|length }}</b> device(s). Check them carefully: a wrong command can cut off access to a device.</div>
+  {% if title %}<p><b>{{ title }}</b></p>{% endif %}
+  <pre style="background:var(--bg);padding:12px;border-radius:8px;overflow:auto;border:1px solid var(--border)">{{ script }}</pre>
+  <div class="grid two">
+    <div><h2>Will run on ({{ ready|length }})</h2><ul>{% for d in ready %}<li>{{ d.name }} <span class="muted">{{ d.ip_address }}:{{ d.ssh_port }}</span></li>{% else %}<li class="muted">No device can run it.</li>{% endfor %}</ul></div>
+    {% if skipped %}<div><h2>Skipped ({{ skipped|length }})</h2><ul>{% for d, why in skipped %}<li>{{ d.name }} <span class="muted">({{ why }})</span></li>{% endfor %}</ul></div>{% endif %}
+  </div>
+  {% if ready %}
+  <form method="post" action="/commands/run">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+    <input type="hidden" name="title" value="{{ title }}">
+    <textarea name="script" hidden>{{ script }}</textarea>
+    {% for d in ready %}<input type="hidden" name="device_ids" value="{{ d.id }}">{% endfor %}
+    <p><label class="check"><input type="checkbox" name="confirm" value="yes" required> I checked the commands and the device list</label></p>
+    <div class="actions"><button class="btn danger">Run on {{ ready|length }} device(s)</button><a class="btn" href="javascript:history.back()">← Back</a></div>
+  </form>
+  {% else %}<a class="btn" href="javascript:history.back()">← Back</a>{% endif %}
+</div>
+{% endblock %}

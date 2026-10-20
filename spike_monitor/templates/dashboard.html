@@ -20,6 +20,20 @@
 </div>
 {% endif %}
 
+{% if summary.upstream %}
+<div class="panel"><h2>🌐 Upstream ISP link</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Status</th><th>Link</th><th>Latency</th><th>Loss</th><th>Signal</th><th>Download</th><th>Upload</th></tr></thead>
+    <tbody>{% for u in summary.upstream %}
+      <tr><td><span class="pill {{ u.status }}">{{ u.status|label }}</span></td><td><a href="/devices/{{ u.id }}">{{ u.name }}</a></td>
+        <td>{{ "%.1f ms"|format(u.latency) if u.latency is not none else "—" }}</td><td>{{ "%.0f%%"|format(u.loss) if u.loss is not none else "—" }}</td>
+        <td>{{ "%.0f dBm"|format(u.signal) if u.signal is not none else "—" }}</td><td>{{ u.rx|bps }}</td><td>{{ u.tx|bps }}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  <p class="muted">Set a device's type to <b>Upstream</b> to show it here. If the upstream link is fine but customers complain, the problem is inside your network.</p>
+</div>
+{% endif %}
+
 <div class="grid two">
   <div class="panel"><h2>Problems</h2>
     <div class="table-wrap"><table>

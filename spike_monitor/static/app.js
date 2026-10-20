@@ -47,6 +47,68 @@ const SpikeUI = (() => {
     setInterval(() => { if (!q.value && !site.value && !status.value && !brand.value) window.location.reload(); }, 60000);
   }
 
+  const timeLabel = (t) => new Date(t + "Z").toLocaleString([], { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+
+  function fmtBps(v) {
+    if (v == null) return "—";
+    const units = ["bps", "Kbps", "Mbps", "Gbps"];
+    let i = 0;
+    while (Math.abs(v) >= 1000 && i < units.length - 1) { v /= 1000; i++; }
+    return `${v.toFixed(i ? 1 : 0)} ${units[i]}`;
+  }
+
+  function lineChart(canvas, datasets, scales) {
+    const css = getComputedStyle(document.documentElement);
+    return new Chart(canvas, {
+      type: "line",
+      data: { labels: [], datasets: datasets.map((d) => ({ pointRadius: 0, borderWidth: 1.5, ...d })) },
+      options: {
+        animation: false, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+        scales: { x: { ticks: { maxTicksLimit: 8, color: css.getPropertyValue("--muted").trim() } }, ...scales },
+      },
+    });
+  }
+
+  // Traffic and health graphs on the device page (they follow the same time range selector).
+  function deviceStats(deviceId) {
+    const range = document.getElementById("range");
+    const iface = document.getElementById("iface");
+    const css = getComputedStyle(document.documentElement);
+    const color = (name) => css.getPropertyValue(name).trim();
+    const traffic = lineChart(document.getElementById("traffic"), [
+      { label: "Download (rx)", data: [], borderColor: color("--accent"), backgroundColor: "rgba(37,99,235,.12)", fill: true },
+      { label: "Upload (tx)", data: [], borderColor: color("--up") },
+    ], { y: { beginAtZero: true, ticks: { callback: fmtBps } } });
+    traffic.options.plugins = { tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${fmtBps(c.parsed.y)}` } } };
+    const health = lineChart(document.getElementById("health"), [
+      { label: "CPU %", data: [], borderColor: color("--down"), yAxisID: "y" },
+      { label: "Memory %", data: [], borderColor: color("--accent"), yAxisID: "y" },
+      { label: "Temperature °C", data: [], borderColor: color("--warning"), yAxisID: "y" },
+      { label: "Clients", data: [], borderColor: color("--unreachable"), yAxisID: "y1", hidden: true },
+    ], { y: { beginAtZero: true, suggestedMax: 100 }, y1: { beginAtZero: true, position: "right", grid: { drawOnChartArea: false } } });
+
+    const load = async () => {
+      if (iface && iface.value) {
+        const t = await getJSON(`/devices/${deviceId}/traffic?interface=${encodeURIComponent(iface.value)}&hours=${range.value}`);
+        traffic.data.labels = t.ts.map(timeLabel);
+        traffic.data.datasets[0].data = t.rx;
+        traffic.data.datasets[1].data = t.tx;
+        traffic.update();
+      }
+      const m = await getJSON(`/devices/${deviceId}/metrics?hours=${range.value}`);
+      health.data.labels = m.ts.map(timeLabel);
+      health.data.datasets[0].data = m.cpu;
+      health.data.datasets[1].data = m.mem;
+      health.data.datasets[2].data = m.temperature;
+      health.data.datasets[3].data = m.clients;
+      health.update();
+    };
+    range.addEventListener("change", load);
+    if (iface) iface.addEventListener("change", load);
+    load();
+    setInterval(load, 60000);
+  }
+
   function deviceChart(deviceId) {
     const ctx = document.getElementById("chart");
     const range = document.getElementById("range");
@@ -68,7 +130,7 @@ const SpikeUI = (() => {
     });
     const load = async () => {
       const h = await getJSON(`/devices/${deviceId}/history?hours=${range.value}`);
-      chart.data.labels = h.ts.map((t) => new Date(t + "Z").toLocaleString([], { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }));
+      chart.data.labels = h.ts.map(timeLabel);
       chart.data.datasets[0].data = h.latency;
       chart.data.datasets[1].data = h.loss;
       chart.update();
@@ -78,5 +140,5 @@ const SpikeUI = (() => {
     setInterval(load, 30000);
   }
 
-  return { dashboard, deviceList, deviceChart };
+  return { dashboard, deviceList, deviceChart, deviceStats };
 })();

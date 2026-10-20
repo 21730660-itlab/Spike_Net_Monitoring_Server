@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block heading %}Discovered devices{% endblock %}
+{% block content %}
+<div class="panel">
+  <p class="muted">Devices that your MikroTiks can see as neighbors (MNDP / CDP / LLDP) but that are not in the inventory yet. Refreshed every poll.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Identity</th><th>IP</th><th>MAC</th><th>Platform / board</th><th>Version</th><th>Seen by</th><th></th></tr></thead>
+    <tbody>{% for item in items %}{% set n = item.n %}
+      <tr><td>{{ n.identity or "—" }}</td><td>{{ n.ip_address or "—" }}</td><td>{{ n.mac_address }}</td><td>{{ n.platform }} {{ n.board }}</td><td>{{ n.version }}</td>
+        <td>{% for d in item.seen_by %}<a href="/devices/{{ d.id }}">{{ d.name }}</a> <span class="muted">({{ n.interface }})</span>{{ ", " if not loop.last }}{% endfor %}</td>
+        <td>{% if user.has_role(Role.TECHNICIAN) and n.ip_address %}<a class="btn small primary" href="{{ item.add_url }}">Add as device</a>{% endif %}</td></tr>
+    {% else %}<tr><td colspan="7" class="muted">Nothing new found. Neighbors appear here after MikroTik devices with API access have been read.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</div>
+{% endblock %}
