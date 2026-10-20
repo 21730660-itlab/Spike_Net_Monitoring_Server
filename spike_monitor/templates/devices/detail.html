@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}{{ device.name }} · Spike Net Monitor{% endblock %}
+{% block heading %}{{ device.name }} <span class="pill {{ device.status }}">{{ device.status|label }}</span>{% endblock %}
+{% block content %}
+<div class="actions" style="margin-bottom:14px">
+  <a class="btn" href="/devices">← All devices</a>
+  {% if user.has_role(Role.TECHNICIAN) %}
+  <a class="btn primary" href="/devices/{{ device.id }}/edit">Edit</a>
+  <form class="inline" method="post" action="/devices/{{ device.id }}/delete" onsubmit="return confirm('Delete {{ device.name }}?')">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><button class="btn danger">Delete</button>
+  </form>
+  {% endif %}
+</div>
+
+<div class="grid cards" style="margin-bottom:18px">
+  <div class="card total"><div class="num">{{ "%.1f"|format(device.last_latency_ms) if device.last_latency_ms is not none else "—" }}</div><div class="lbl">Latency now (ms)</div></div>
+  <div class="card {{ 'down' if (device.last_loss_pct or 0) > 0 else 'up' }}"><div class="num">{{ "%.0f"|format(device.last_loss_pct) if device.last_loss_pct is not none else "—" }}%</div><div class="lbl">Packet loss now</div></div>
+  <div class="card up"><div class="num">{{ "%.2f"|format(uptime_24h) if uptime_24h is not none else "—" }}%</div><div class="lbl">Uptime (24h)</div></div>
+  <div class="card total"><div class="num">{{ "%.1f"|format(avg_latency_24h) if avg_latency_24h is not none else "—" }}</div><div class="lbl">Avg latency 24h (ms)</div></div>
+</div>
+
+<div class="panel">
+  <div class="topbar" style="margin-bottom:8px"><h2 style="margin:0">Latency &amp; packet loss</h2>
+    <select id="range" style="width:auto"><option value="1">1 hour</option><option value="6">6 hours</option><option value="24" selected>24 hours</option><option value="168">7 days</option></select>
+  </div>
+  <div class="chart-box"><canvas id="chart"></canvas></div>
+</div>
+
+<div class="grid two">
+  <div class="panel"><h2>Device</h2>
+    <dl class="kv">
+      <dt>IP address</dt><dd>{{ device.ip_address }}</dd>
+      <dt>Brand / type</dt><dd>{{ device.brand|label }} · {{ device.device_type|label }}</dd>
+      <dt>Site</dt><dd>{% if device.site %}{{ device.site.name }}{% else %}—{% endif %}</dd>
+      <dt>Parent (uplink)</dt><dd>{% if device.parent %}<a href="/devices/{{ device.parent.id }}">{{ device.parent.name }}</a>{% else %}—{% endif %}</dd>
+      <dt>Connected devices</dt><dd>{% for c in device.children %}<a href="/devices/{{ c.id }}">{{ c.name }}</a>{{ ", " if not loop.last }}{% else %}—{% endfor %}</dd>
+      <dt>VLANs</dt><dd>{% for v in device.vlans %}{{ v.vlan_id }} ({{ v.name }}){{ ", " if not loop.last }}{% else %}—{% endfor %}</dd>
+      <dt>MAC</dt><dd>{{ device.mac_address or "—" }}</dd>
+      <dt>Model</dt><dd>{{ device.model or "—" }}</dd>
+      <dt>Serial</dt><dd>{{ device.serial_number or "—" }}</dd>
+      <dt>Firmware</dt><dd>{{ device.os_version or "—" }}</dd>
+      <dt>Last seen</dt><dd>{{ device.last_seen|dt }}</dd>
+      <dt>Status since</dt><dd>{{ device.status_changed_at|dt }}</dd>
+      {% if device.notes %}<dt>Notes</dt><dd style="white-space:pre-wrap">{{ device.notes }}</dd>{% endif %}
+    </dl>
+  </div>
+  <div class="panel"><h2>Access</h2>
+    <dl class="kv">
+      <dt>Login</dt><dd>{{ login_user or "—" }}{% if device.credential_profile %} <span class="muted">(profile: {{ device.credential_profile.name }})</span>{% endif %}</dd>
+      <dt>Password</dt><dd>{{ "stored (encrypted)" if has_password else "not set" }}</dd>
+      <dt>Winbox</dt><dd>{{ device.winbox_port }}</dd>
+      <dt>SSH</dt><dd>{{ device.ssh_port }} {{ "" if device.use_ssh else "(disabled)" }}</dd>
+      <dt>API / API-SSL</dt><dd>{{ device.api_port }} / {{ device.api_ssl_port }} {% if not device.use_api %}(disabled){% elif device.use_api_ssl %}(using SSL){% endif %}</dd>
+      <dt>HTTP / HTTPS</dt><dd>{{ device.http_port }} / {{ device.https_port }}</dd>
+    </dl>
+    <p class="muted">Open in Winbox, SSH console, Import from device and Backups arrive in the next phases.</p>
+  </div>
+</div>
+
+<div class="panel"><h2>Status history</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Time</th><th>From</th><th>To</th><th>Message</th></tr></thead>
+    <tbody>{% for e in events %}<tr><td>{{ e.ts|dt }}</td><td><span class="pill {{ e.old_status }}">{{ e.old_status|label }}</span></td><td><span class="pill {{ e.new_status }}">{{ e.new_status|label }}</span></td><td>{{ e.message }}</td></tr>
+    {% else %}<tr><td colspan="4" class="muted">No status changes yet.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/vendor/chart.umd.js"></script>
+<script src="/static/app.js"></script>
+<script>SpikeUI.deviceChart({{ device.id }});</script>
+{% endblock %}

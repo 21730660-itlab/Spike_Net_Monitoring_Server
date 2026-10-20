@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Devices · Spike Net Monitor{% endblock %}
+{% block heading %}Devices <span class="muted" style="font-size:1rem">({{ items|length }})</span>{% endblock %}
+{% block content %}
+<div class="panel">
+  <div class="topbar" style="margin-bottom:10px">
+    <div class="filters">
+      <input type="text" id="q" placeholder="Search name, IP, model…">
+      <select id="f-site"><option value="">All sites</option>
+        {% for s in items|map(attribute='site')|reject('none')|unique(attribute='id')|sort(attribute='name') %}<option>{{ s.name }}</option>{% endfor %}
+      </select>
+      <select id="f-status"><option value="">All statuses</option>
+        {% for s in Status.ALL %}<option value="{{ s }}">{{ s|label }}</option>{% endfor %}
+      </select>
+      <select id="f-brand"><option value="">All brands</option>
+        {% for b in ["mikrotik", "ubiquiti", "mimosa", "other"] %}<option value="{{ b }}">{{ b|label }}</option>{% endfor %}
+      </select>
+    </div>
+    {% if can_edit %}
+    <div class="actions">
+      <a class="btn" href="/devices/import">Import CSV</a>
+      <a class="btn primary" href="/devices/new">+ Add device</a>
+    </div>
+    {% endif %}
+  </div>
+  <div class="table-wrap"><table id="devices">
+    <thead><tr><th>Status</th><th>Name</th><th>IP</th><th>Brand</th><th>Type</th><th>Site</th><th>Parent</th><th>Latency</th><th>Loss</th><th>Last seen</th></tr></thead>
+    <tbody>
+    {% for d in items %}
+      <tr data-id="{{ d.id }}" data-site="{{ d.site.name if d.site else '' }}" data-status="{{ d.status }}" data-brand="{{ d.brand }}"
+          data-text="{{ (d.name ~ ' ' ~ d.ip_address ~ ' ' ~ d.model ~ ' ' ~ d.mac_address)|lower }}">
+        <td><span class="pill {{ d.status }}">{{ d.status|label }}</span></td>
+        <td><a href="/devices/{{ d.id }}">{{ d.name }}</a></td>
+        <td>{{ d.ip_address }}</td>
+        <td>{{ d.brand|label }}</td>
+        <td>{{ d.device_type|label }}</td>
+        <td>{{ d.site.name if d.site else "" }}</td>
+        <td>{{ d.parent.name if d.parent else "" }}</td>
+        <td class="lat">{{ "%.1f ms"|format(d.last_latency_ms) if d.last_latency_ms is not none else "—" }}</td>
+        <td class="loss">{{ "%.0f%%"|format(d.last_loss_pct) if d.last_loss_pct is not none else "—" }}</td>
+        <td class="seen">{{ d.last_seen|dt }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="10" class="muted">No devices yet. Add one, or import a CSV file.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="/static/app.js"></script><script>SpikeUI.deviceList();</script>{% endblock %}

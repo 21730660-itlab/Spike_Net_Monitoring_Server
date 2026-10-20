@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block heading %}Import devices from CSV{% endblock %}
+{% block content %}
+{% if report %}
+<div class="panel">
+  <h2>Import result</h2>
+  <p><b>{{ report.created }}</b> created, <b>{{ report.updated }}</b> updated (matched by IP address).</p>
+  {% if report.errors %}<div class="flash error"><b>{{ report.errors|length }} problem(s):</b><ul>{% for e in report.errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
+  <a class="btn primary" href="/devices">View devices</a>
+</div>
+{% endif %}
+<div class="panel">
+  <p>Upload a CSV file (you can save one from Excel with <i>Save As → CSV UTF-8</i>). Only <b>name</b> and <b>ip_address</b> are required.
+     Devices with an IP that already exists are updated. Unknown sites are created automatically. <b>parent</b> can be the name or IP of another device.</p>
+  <p class="muted">Columns: {{ columns|join(", ") }}</p>
+  <p><a class="btn" href="/devices/import/template.csv">Download template</a></p>
+  <form method="post" action="/devices/import" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+    <p><input type="file" name="file" accept=".csv,text/csv" required></p>
+    <button class="btn primary">Import</button>
+  </form>
+</div>
+{% endblock %}

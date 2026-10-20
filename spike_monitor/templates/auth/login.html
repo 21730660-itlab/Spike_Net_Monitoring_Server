@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in · Spike Net Monitor</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<div class="login-wrap">
+  <div class="panel login-box">
+    <h1>📡 Spike Net Monitor</h1>
+    {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+    <form method="post" action="/login">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+      <p><label for="username">Username</label><input type="text" id="username" name="username" autofocus autocomplete="username"></p>
+      <p><label for="password">Password</label><input type="password" id="password" name="password" autocomplete="current-password"></p>
+      <button class="btn primary" style="width:100%">Sign in</button>
+    </form>
+  </div>
+</div>
+</body>
+</html>

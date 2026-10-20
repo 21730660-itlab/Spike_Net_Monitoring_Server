@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block heading %}Dashboard{% endblock %}
+{% block content %}
+<div class="grid cards" style="margin-bottom:18px" id="cards">
+  <div class="card total"><div class="num" data-k="total">{{ summary.total }}</div><div class="lbl">Devices</div></div>
+  <div class="card up"><div class="num" data-k="up">{{ summary.counts.up }}</div><div class="lbl">Up</div></div>
+  <div class="card warning"><div class="num" data-k="warning">{{ summary.counts.warning }}</div><div class="lbl">Degraded</div></div>
+  <div class="card down"><div class="num" data-k="down">{{ summary.counts.down }}</div><div class="lbl">Down</div></div>
+  <div class="card unreachable"><div class="num" data-k="unreachable">{{ summary.counts.unreachable }}</div><div class="lbl">Unreachable (parent down)</div></div>
+  <div class="card"><div class="num" data-k="unknown">{{ summary.counts.unknown + summary.counts.paused }}</div><div class="lbl">Unknown / paused</div></div>
+</div>
+
+{% if summary.total == 0 %}
+<div class="panel"><h2>Getting started</h2>
+  <ol>
+    <li>Create your <a href="/sites">sites</a> (towers, POPs).</li>
+    <li>Optionally add <a href="/port-profiles">port profiles</a>{% if user.role == Role.ADMIN %} and <a href="/credentials">credential profiles</a>{% endif %}.</li>
+    <li>Add your <a href="/devices/new">devices</a> or <a href="/devices/import">import them from CSV</a>, and set each device's parent.</li>
+  </ol>
+</div>
+{% endif %}
+
+<div class="grid two">
+  <div class="panel"><h2>Problems</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Status</th><th>Device</th><th>Site</th><th>Since</th></tr></thead>
+      <tbody id="problems">
+      {% for p in summary.problems %}
+        <tr><td><span class="pill {{ p.status }}">{{ p.status|label }}</span></td><td><a href="/devices/{{ p.id }}">{{ p.name }}</a> <span class="muted">{{ p.ip }}</span></td><td>{{ p.site }}</td><td>{{ p.since }}</td></tr>
+      {% else %}<tr><td colspan="4" class="muted">✅ No problems.</td></tr>{% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+  <div class="panel"><h2>Sites</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Site</th><th>Devices</th><th>Up</th><th>Degraded</th><th>Down</th></tr></thead>
+      <tbody id="sites">
+      {% for s in summary.sites %}
+        <tr><td>{{ s.name }}</td><td>{{ s.total }}</td><td>{{ s.counts.up }}</td><td>{{ s.counts.warning }}</td><td>{{ s.counts.down + s.counts.unreachable }}</td></tr>
+      {% else %}<tr><td colspan="5" class="muted">No sites yet.</td></tr>{% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+</div>
+
+<div class="panel"><h2>Recent events</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Time</th><th>Status</th><th>Event</th></tr></thead>
+    <tbody>{% for e in events %}<tr><td>{{ e.ts|dt }}</td><td><span class="pill {{ e.new_status }}">{{ e.new_status|label }}</span></td><td><a href="/devices/{{ e.device_id }}">{{ e.message }}</a></td></tr>
+    {% else %}<tr><td colspan="3" class="muted">No events yet.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</div>
+<p class="muted" id="engine-info">
+  {% if summary.engine.last_cycle_at %}Last check: {{ summary.engine.last_cycle_at }} · took {{ "%.1f"|format(summary.engine.last_cycle_seconds) }}s · every {{ summary.engine.interval }}s{% else %}Waiting for the first monitoring cycle…{% endif %}
+</p>
+{% endblock %}
+{% block scripts %}<script src="/static/app.js"></script><script>SpikeUI.dashboard();</script>{% endblock %}

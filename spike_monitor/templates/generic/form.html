@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}{{ crud.singular }} · Spike Net Monitor{% endblock %}
+{% block heading %}{{ "Edit" if obj else "Add" }} {{ crud.singular|lower }}{% endblock %}
+{% block content %}
+<div class="panel">
+  {% if errors.get("__all__") %}<div class="flash error">{{ errors["__all__"] }}</div>{% elif errors %}<div class="flash error">Please fix the highlighted fields.</div>{% endif %}
+  <form method="post" action="{{ crud.prefix }}/{{ obj.id ~ '/edit' if obj else 'new' }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+    {% set groups = [] %}{% for f in fields %}{% if f.group not in groups %}{% set _ = groups.append(f.group) %}{% endif %}{% endfor %}
+    {% for g in groups %}
+      {% if g %}<fieldset><legend>{{ g }}</legend>{% endif %}
+      <div class="form-grid">
+        {% for f in fields if f.group == g %}{% include "generic/_field.html" %}{% endfor %}
+      </div>
+      {% if g %}</fieldset>{% endif %}
+    {% endfor %}
+    <div class="actions" style="margin-top:16px">
+      <button class="btn primary">Save</button>
+      <a class="btn" href="{{ crud.prefix }}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

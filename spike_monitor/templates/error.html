@@ -1,0 +1,5 @@
+{% extends "base.html" %}
+{% block heading %}Error {{ code }}{% endblock %}
+{% block content %}
+<div class="panel"><p>{{ detail }}</p><a class="btn" href="javascript:history.back()">Go back</a> <a class="btn" href="/">Dashboard</a></div>
+{% endblock %}

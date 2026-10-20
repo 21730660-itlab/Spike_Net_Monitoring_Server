@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block heading %}Users{% endblock %}
+{% block content %}
+<div class="panel">
+  <div class="topbar" style="margin-bottom:10px">
+    <span class="muted">Admin: everything · Technician: devices, sites, VLANs (no passwords or users) · Viewer: read only</span>
+    <a class="btn primary" href="/admin/users/new">+ Add user</a>
+  </div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Username</th><th>Name</th><th>Role</th><th>WhatsApp</th><th>Active</th><th>Last login</th><th></th></tr></thead>
+    <tbody>{% for u in users %}
+      <tr><td>{{ u.username }}{% if u.must_change_password %} <span class="muted">(must change password)</span>{% endif %}</td><td>{{ u.full_name }}</td><td>{{ u.role|label }}</td><td>{{ u.phone }}</td>
+        <td>{{ "Yes" if u.is_active else "No" }}</td><td>{{ u.last_login|dt }}</td>
+        <td class="actions"><a class="btn small" href="/admin/users/{{ u.id }}/edit">Edit</a>
+          {% if u.id != user.id %}<form class="inline" method="post" action="/admin/users/{{ u.id }}/delete" onsubmit="return confirm('Delete user {{ u.username }}?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><button class="btn small danger">Delete</button></form>{% endif %}
+        </td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+</div>
+{% endblock %}

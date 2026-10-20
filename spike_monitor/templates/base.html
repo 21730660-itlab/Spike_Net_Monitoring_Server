@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Spike Net Monitor{% endblock %}</title>
+  <link rel="stylesheet" href="/static/app.css">
+  {% block head %}{% endblock %}
+</head>
+<body>
+{% set path = request.url.path %}
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">📡 Spike Net<small>Monitoring Server</small></div>
+    <nav>
+      <a href="/" class="{{ 'active' if path == '/' }}">Dashboard</a>
+      <a href="/devices" class="{{ 'active' if path.startswith('/devices') }}">Devices</a>
+      <div class="section">Inventory</div>
+      <a href="/sites" class="{{ 'active' if path.startswith('/sites') }}">Sites</a>
+      <a href="/vlans" class="{{ 'active' if path.startswith('/vlans') }}">VLANs</a>
+      <a href="/customers" class="{{ 'active' if path.startswith('/customers') }}">Customers</a>
+      <a href="/port-profiles" class="{{ 'active' if path.startswith('/port-profiles') }}">Port profiles</a>
+      {% if user and user.role == Role.ADMIN %}
+      <a href="/credentials" class="{{ 'active' if path.startswith('/credentials') }}">Credential profiles</a>
+      <div class="section">Administration</div>
+      <a href="/admin/users" class="{{ 'active' if path.startswith('/admin/users') }}">Users</a>
+      <a href="/admin/audit" class="{{ 'active' if path.startswith('/admin/audit') }}">Audit log</a>
+      {% endif %}
+    </nav>
+  </aside>
+  <main class="main">
+    <div class="topbar">
+      <h1>{% block heading %}{% endblock %}</h1>
+      {% if user %}
+      <div class="userbox">
+        <span>{{ user.full_name or user.username }} · {{ user.role|label }}</span>
+        <a class="btn small" href="/account/password">Change password</a>
+        <form class="inline" method="post" action="/logout">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+          <button class="btn small">Log out</button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+    {% for f in pop_flashes(request) %}<div class="flash {{ f.category }}">{{ f.message }}</div>{% endfor %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+{% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}{{ crud.title }} · Spike Net Monitor{% endblock %}
+{% block heading %}{{ crud.title }}{% endblock %}
+{% block content %}
+<div class="panel">
+  <div class="topbar" style="margin-bottom:10px">
+    <span class="muted">{{ crud.description }}</span>
+    {% if can_edit %}<a class="btn primary" href="{{ crud.prefix }}/new">+ Add {{ crud.singular|lower }}</a>{% endif %}
+  </div>
+  {% if items %}
+  <div class="table-wrap"><table>
+    <thead><tr>{% for label, _ in crud.columns %}<th>{{ label }}</th>{% endfor %}{% if can_edit %}<th></th>{% endif %}</tr></thead>
+    <tbody>
+    {% for item in items %}
+      <tr>
+        {% for _, getter in crud.columns %}<td>{{ getter(item) if getter(item) is not none else "" }}</td>{% endfor %}
+        {% if can_edit %}
+        <td class="actions">
+          <a class="btn small" href="{{ crud.prefix }}/{{ item.id }}/edit">Edit</a>
+          <form class="inline" method="post" action="{{ crud.prefix }}/{{ item.id }}/delete"
+                onsubmit="return confirm('Delete this {{ crud.singular|lower }}?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+            <button class="btn small danger">Delete</button>
+          </form>
+        </td>
+        {% endif %}
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}
+  <p class="muted">Nothing here yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

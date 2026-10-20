@@ -1,0 +1,28 @@
+{% set val = values.get(f.name) %}
+<div class="field {{ 'has-error' if errors.get(f.name) }}">
+{% if f.kind == "bool" %}
+  <label class="check"><input type="checkbox" name="{{ f.name }}" {{ 'checked' if val }}> {{ f.label }}</label>
+{% else %}
+  <label for="f_{{ f.name }}">{{ f.label }}{% if f.required %} *{% endif %}</label>
+  {% if f.kind == "select" %}
+    <select id="f_{{ f.name }}" name="{{ f.name }}">
+      {% if not f.required %}<option value="">— none —</option>{% endif %}
+      {% for k, v in options[f.name] %}<option value="{{ k }}" {{ 'selected' if val is not none and k == val|string }}>{{ v }}</option>{% endfor %}
+    </select>
+  {% elif f.kind == "multiselect" %}
+    <select id="f_{{ f.name }}" name="{{ f.name }}" multiple>
+      {% for k, v in options[f.name] %}<option value="{{ k }}" {{ 'selected' if val and (k|int) in val }}>{{ v }}</option>{% endfor %}
+    </select>
+  {% elif f.kind == "textarea" %}
+    <textarea id="f_{{ f.name }}" name="{{ f.name }}">{{ val or "" }}</textarea>
+  {% elif f.kind == "password" %}
+    <input type="password" id="f_{{ f.name }}" name="{{ f.name }}" autocomplete="new-password" value="">
+  {% else %}
+    <input type="{{ 'number' if f.kind in ('int', 'port', 'float') else 'text' }}" id="f_{{ f.name }}" name="{{ f.name }}"
+           value="{{ val if val is not none else '' }}" placeholder="{{ f.placeholder }}"
+           {% if f.kind == 'float' %}step="any"{% endif %}>
+  {% endif %}
+{% endif %}
+  {% if errors.get(f.name) %}<div class="error-text">{{ errors[f.name] }}</div>{% endif %}
+  {% if f.help %}<div class="help">{{ f.help }}</div>{% endif %}
+</div>
