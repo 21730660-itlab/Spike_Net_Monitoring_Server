@@ -538,3 +538,14 @@ def test_https_interception_is_explained_and_custom_ca_works(tmp_path, monkeypat
     finally:
         server.shutdown()
         https.ssl_context.cache_clear()
+
+
+def test_dns_failure_is_explained(monkeypatch):
+    from spike_monitor.alerts import telegram
+
+    def no_dns(req, timeout, **kw):
+        raise urllib.error.URLError(OSError(11001, "getaddrinfo failed"))
+
+    monkeypatch.setattr(telegram.urllib.request, "urlopen", no_dns)
+    with pytest.raises(telegram.TelegramError, match="could not look up the address"):
+        telegram.send("1:A", "555", "hi")

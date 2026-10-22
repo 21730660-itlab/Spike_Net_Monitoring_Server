@@ -36,6 +36,17 @@ def urlopen(req, timeout: float):
     return urllib.request.urlopen(req, timeout=timeout, context=ssl_context())
 
 
+DNS_HINT = (" The server PC could not look up the address (DNS): it has no internet at the moment, or its DNS "
+            "server does not answer. On the server PC, try 'nslookup api.telegram.org' in Command Prompt; if it "
+            "fails, set the network adapter's DNS to 1.1.1.1 and 8.8.8.8 (or fix DNS on the router it uses).")
+DNS_ERRORS = ("getaddrinfo failed", "Errno 11001", "Errno 11004", "Name or service not known",
+              "Temporary failure in name resolution", "nodename nor servname")
+
+
 def explain(exc: BaseException) -> str:
     text = str(exc)
-    return text + HINT if "CERTIFICATE_VERIFY_FAILED" in text else text
+    if "CERTIFICATE_VERIFY_FAILED" in text:
+        return text + HINT
+    if any(e in text for e in DNS_ERRORS):
+        return text + DNS_HINT
+    return text
