@@ -16,6 +16,8 @@ Register-ScheduledTask -TaskName $name -Action $action -Trigger $trigger -Princi
     -Description "Spike Net network monitoring server" -Force | Out-Null
 New-NetFirewallRule -DisplayName "Spike Net Monitor" -Direction Inbound -Protocol TCP -LocalPort 8000 -Action Allow `
     -ErrorAction SilentlyContinue | Out-Null
+New-NetFirewallRule -DisplayName "Spike Net discovery" -Direction Inbound -Protocol UDP -LocalPort 5678,10001 -Action Allow `
+    -ErrorAction SilentlyContinue | Out-Null
 Start-ScheduledTask -TaskName $name
 Write-Host "Installed. Spike Net Monitor now runs in the background and starts with Windows." -ForegroundColor Green
 Write-Host "Open http://localhost:8000  -  log file: $env:ProgramData\SpikeNetMonitor\server.log"

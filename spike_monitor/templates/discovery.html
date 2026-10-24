@@ -3,6 +3,7 @@
 {% block content %}
 <div class="panel">
   <div style="float:right">{% with kind="neighbors", what="the discovered devices list (it fills again on the next poll)", device_id=None, button="Clear list" %}{% include "generic/_clear.html" %}{% endwith %}</div>
+  {% if can_import %}<p><a class="btn" href="/discovery/scan">🔍 Scan the server's network cards (like Winbox)</a></p>{% endif %}
   <p class="muted">Devices that your MikroTiks can see as neighbors (MNDP / CDP / LLDP) but that are not in the inventory yet. Refreshed every poll.</p>
   {% if not nb_rows %}<p class="muted">Nothing new found. Neighbors appear here after MikroTik devices with API access have been read.</p>
   {% elif can_import %}

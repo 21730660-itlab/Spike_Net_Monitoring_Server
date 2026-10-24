@@ -3,7 +3,7 @@
 {% block content %}
 <div class="panel" style="max-width:640px">
   <p>Your browser may ask to open the <b>Spike Net helper</b>: choose <b>Open</b> (tick "always allow" to skip this next time).</p>
-  <p><a class="btn primary" id="go" href="{{ link }}">Open again</a> <a class="btn" href="/devices/{{ device.id }}">← Back to the device</a></p>
+  <p><a class="btn primary" id="go" href="{{ link }}">Open again</a> {% if device.id %}<a class="btn" href="/devices/{{ device.id }}">← Back to the device</a>{% else %}<a class="btn" href="/discovery/scan">← Back to the scan</a>{% endif %}</p>
   <p class="muted">The link works once, within 60 seconds. Nothing happens? The helper is not installed on this PC yet:
     <a href="/tools#helper">install it from Tools</a> (one minute, no administrator rights).</p>
 </div>

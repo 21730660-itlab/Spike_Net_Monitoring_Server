@@ -18,6 +18,9 @@ See [docs/DESIGN.md](docs/DESIGN.md) for the full requirements and the phase pla
   uptime, interface traffic, wireless clients with signal / CCQ, matched to your customers by MAC
 - Import from device (identity, model, serial, version, VLANs, IPs, wireless, neighbors)
 - Discovered devices: neighbors your MikroTiks see that are not in the app yet
+- Scan network (like Winbox's Neighbors tab): MikroTik MNDP and Ubiquiti discovery on the server PC's
+  network cards (choose one or all), finds devices even without an IP in your subnet; import the new ones
+- Winbox by MAC address (from the scan or a device page), for devices whose IP is wrong or unreachable
 - Push settings (admin): run commands on one or many devices over SSH, with preview and per-device results
 - Traffic / health graphs up to 1 year
 - Network map: sites and their links, every device and its uplink, and a geographic map of your towers

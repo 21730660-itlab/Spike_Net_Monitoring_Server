@@ -75,7 +75,7 @@ try {
         exit 1
     }
     $info = Invoke-RestMethod -Uri "$server/api/launch/$($query['token'])" -Method Get -TimeoutSec 10
-    $address = "$($info.host):$($info.port)"
+    $address = if ($info.port) { "$($info.host):$($info.port)" } else { "$($info.host)" }  # no port = MAC address
     if ($info.kind -eq "winbox") {
         $winbox = $cfg.winbox
         if (-not $winbox -or -not (Test-Path $winbox)) {

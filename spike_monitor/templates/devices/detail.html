@@ -14,7 +14,8 @@
   {% endif %}
   {% if user.role == Role.ADMIN and device.use_ssh %}<a class="btn" href="/commands/new?device={{ device.id }}">📤 Run command</a>{% endif %}
   {% if user.has_role(Role.TECHNICIAN) %}
-    {% if device.brand == "mikrotik" %}<form class="inline" method="post" action="/devices/{{ device.id }}/launch/winbox"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><button class="btn">🖥️ Winbox</button></form>{% endif %}
+    {% if device.brand == "mikrotik" %}<form class="inline" method="post" action="/devices/{{ device.id }}/launch/winbox"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><button class="btn">🖥️ Winbox</button></form>
+    {% if device.mac_address %}<form class="inline" method="post" action="/launch/winbox-mac"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><input type="hidden" name="mac" value="{{ device.mac_address }}"><input type="hidden" name="device_id" value="{{ device.id }}"><button class="btn" title="Open by MAC address: works when the IP is wrong or unreachable, if your PC is on the same network">🖥️ Winbox (MAC)</button></form>{% endif %}{% endif %}
     {% if device.use_ssh %}<form class="inline" method="post" action="/devices/{{ device.id }}/launch/ssh"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><button class="btn">⌨️ SSH</button></form>{% endif %}
     <a class="btn" target="_blank" rel="noopener" href="{{ 'https' if device.brand == 'mimosa' else 'http' }}://{{ device.ip_address }}:{{ device.https_port if device.brand == 'mimosa' else device.http_port }}/">🌐 Web</a>
   {% endif %}

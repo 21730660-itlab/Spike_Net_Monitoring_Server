@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block heading %}Scan network (like Winbox){% endblock %}
+{% block content %}
+<div class="panel">
+  <p class="muted">Finds devices on the server PC's own network cards with the same broadcast that Winbox's <b>Neighbors</b> tab uses
+    (MikroTik MNDP), plus Ubiquiti discovery. Devices are found even when their IP is in another subnet or they have no IP.
+    Only devices on the same Layer 2 network as the card are seen (not behind a router).</p>
+  <form method="post" action="/discovery/scan" class="actions" style="align-items:flex-end;flex-wrap:wrap" data-scan-form>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+    <label>Network card<br><select name="card" style="min-width:260px">
+      <option value="">All network cards</option>
+      {% for c in cards %}<option value="{{ c.ip }}">{{ c.label }}</option>{% endfor %}
+    </select></label>
+    <label>Listen for<br><select name="seconds" style="width:auto">
+      {% for s in (5, 10, 20, 30) %}<option value="{{ s }}">{{ s }} seconds</option>{% endfor %}
+    </select></label>
+    <button class="btn primary" data-scan-btn>🔍 Scan</button>
+  </form>
+  {% if not cards %}<p class="error-text">No network card with an IPv4 address was found on the server.</p>{% endif %}
+  <p class="muted" style="margin-top:8px">Some devices answer only to their once-a-minute announcement; if one is missing, scan for 30 seconds or more.
+    Nothing found at all? Run <code>scripts\open_firewall.bat</code> as administrator on the server once (it allows UDP 5678 and 10001).</p>
+</div>
+
+{% if last %}
+<div class="panel">
+  <h3>Found {{ rows|length }} device(s) <span class="muted" style="font-weight:normal">· {{ last.at|dt }} · {{ last.cards }}</span></h3>
+  {% for p in last.problems %}<div class="flash error">{{ p }}</div>{% endfor %}
+  {% if rows %}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Identity</th><th>IP</th><th>MAC</th><th>Model</th><th>Version</th><th>Uptime</th><th>Its port</th><th>Heard on</th><th>In the app</th><th></th></tr></thead>
+    <tbody>{% for r in rows %}<tr>
+      <td>{{ r.name }}</td><td>{{ r.ip }}</td><td><code>{{ r.mac }}</code></td>
+      <td>{{ r.platform }} {{ r.board }}</td><td>{{ r.version }}</td>
+      <td>{{ r.uptime|uptime if r.uptime is not none else "" }}</td><td>{{ r.port }}</td><td class="muted">{{ r.card }}</td>
+      <td>{% if r.device %}<a href="/devices/{{ r.device.id }}">{{ r.device.name }}</a>{% elif r.customer %}Customer: {{ r.customer.name }}{% else %}<span class="pill up">new</span>{% endif %}</td>
+      <td>{% if "MNDP" in r.protocols %}<form class="inline" method="post" action="/launch/winbox-mac">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><input type="hidden" name="mac" value="{{ r.mac }}">
+        <input type="hidden" name="name" value="{{ r.name }}"><input type="hidden" name="device_id" value="{{ r.device.id if r.device else '' }}">
+        <button class="btn small" title="Open in Winbox by MAC address (the PC must be on the same network)">🖥️ Winbox (MAC)</button></form>{% endif %}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}<p class="muted">No device answered on {{ last.cards }}.</p>{% endif %}
+</div>
+
+{% if nb_rows %}
+<div class="panel">
+  <h3>Add new ones to the app</h3>
+  <form method="post" action="/discovery/import">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+    <label>Site for the imported devices<br><select name="nb_site" style="width:auto;margin-bottom:10px">
+      <option value="">(none)</option>{% for s in sites %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+    </select></label>
+    {% include "generic/_neighbors_import.html" %}
+    <div class="actions" style="margin-top:12px"><button class="btn primary">Import selected</button></div>
+  </form>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}
+{% block scripts %}<script>
+document.querySelector("[data-scan-form]").addEventListener("submit", () => {
+  const b = document.querySelector("[data-scan-btn]"); b.disabled = true; b.textContent = "Scanning…";
+});
+</script>{% endblock %}

@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..deps import audit, render, require_technician
+from ..forms import MAC_RE
 from ..models import Brand, Device, User
 from ..security import verify_csrf
 
@@ -59,13 +60,38 @@ def launch(device_id: int, kind: str, request: Request, db: Session = Depends(ge
     return render(request, "devices/launch.html", {"device": device, "kind": kind, "link": link})
 
 
+@router.post("/launch/winbox-mac", dependencies=[Depends(verify_csrf)])
+async def launch_by_mac(request: Request, db: Session = Depends(get_db), user: User = Depends(require_technician)):
+    """Open Winbox by MAC address (Layer 2, like Winbox's Neighbors tab): works without a reachable IP
+    when the technician's PC is on the same network. Uses the device's login if it is in the app."""
+    form = await request.form()
+    mac = str(form.get("mac", "")).strip().upper().replace("-", ":")
+    if not MAC_RE.match(mac):
+        raise HTTPException(400, "Invalid MAC address.")
+    device_id = str(form.get("device_id", ""))
+    device = db.get(Device, int(device_id)) if device_id.isdigit() else None
+    name = device.name if device else (str(form.get("name", "")).strip()[:128] or mac)
+    token = secrets.token_urlsafe(24)
+    _tokens(request)[token] = {"device_id": device.id if device else None, "mac": mac, "name": name,
+                               "kind": "winbox", "user": user.username, "expires": time.monotonic() + TOKEN_SECONDS}
+    audit(db, request, user.username, "device.open_winbox_mac", f"{name} {mac}")
+    db.commit()
+    link = f"spikenet://open?server={quote(server_url(request), safe='')}&token={token}"
+    return render(request, "devices/launch.html", {"device": device or {"name": f"{name} ({mac})"},
+                                                   "kind": "winbox", "link": link})
+
+
 @router.get("/api/launch/{token}")
 def redeem(token: str, request: Request, db: Session = Depends(get_db)):
     """Called by the helper (no browser session). Each token works once, for 60 seconds."""
     entry = _tokens(request).pop(token, None)
     if entry is None:
         return JSONResponse({"detail": "This link has expired. Click the button again."}, status_code=404)
-    device = db.get(Device, entry["device_id"])
+    device = db.get(Device, entry["device_id"]) if entry["device_id"] else None
+    if entry.get("mac"):  # Winbox by MAC address: no port
+        username, password = device.login(request.app.state.secret_box) if device else ("admin", "")
+        return {"kind": "winbox", "name": entry["name"], "host": entry["mac"], "port": None,
+                "username": username, "password": password}
     if device is None:
         return JSONResponse({"detail": "Device not found"}, status_code=404)
     username, password = device.login(request.app.state.secret_box)
