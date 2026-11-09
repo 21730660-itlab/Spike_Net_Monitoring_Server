@@ -19,7 +19,28 @@
       <dt>Usable hosts</dt><dd>{{ calc.first_host }} – {{ calc.last_host }}</dd>
       <dt>Number of hosts</dt><dd>{{ calc.usable }} usable <span class="muted">({{ calc.total }} addresses)</span></dd>
       {% if calc.binary_mask %}<dt>Mask in binary</dt><dd style="font-family:Consolas,monospace;font-size:.85rem">{{ calc.binary_mask }}</dd>{% endif %}
-    </dl>{% endif %}
+    </dl>
+    {% if usage %}
+      {% if usage.this %}
+      <div class="flash error" style="margin-top:12px">⚠️ <b>{{ usage.address }} is already in use</b> by
+        {% for e in usage.this %}<a href="/devices/{{ e.device.id }}">{{ e.device.name }}</a> <span class="muted">({{ e.where }})</span>{{ ", " if not loop.last }}{% endfor %}.
+        A new device cannot be added with this IP.{% if usage.free %} First free address: <b>{{ usage.free }}</b>.{% endif %}</div>
+      {% else %}
+      <div class="flash success" style="margin-top:12px">✅ <b>{{ usage.address }}</b> is not used by any device in the app.
+        {% if usage.free and usage.free != usage.address %}First free address in this network: <b>{{ usage.free }}</b>.{% endif %}</div>
+      {% endif %}
+      {% if usage.searched and not usage.free %}<p class="error-text">This network has no free address left.</p>{% endif %}
+      {% if usage.used %}
+      <details style="margin-top:8px"><summary>{{ usage.used|length }} address(es) of {{ calc.network }} already used in the app</summary>
+        <div class="table-wrap"><table>
+          <thead><tr><th>IP</th><th>Used by</th></tr></thead>
+          <tbody>{% for addr, entries in usage.used %}<tr><td>{{ addr }}</td><td>{% for e in entries %}<a href="/devices/{{ e.device.id }}">{{ e.device.name }}</a> <span class="muted">({{ e.where }})</span>{{ ", " if not loop.last }}{% endfor %}</td></tr>{% endfor %}</tbody>
+        </table></div>
+      </details>
+      {% endif %}
+      <p class="muted" style="margin-top:6px">Checked against device IPs and the interface IPs read from your routers. Addresses used by customers or devices not in the app are not known.</p>
+    {% endif %}
+    {% endif %}
   </div>
 
   <div class="panel" id="plan"><h2>✂️ Split a network / plan subnets (VLSM)</h2>

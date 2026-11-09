@@ -89,7 +89,7 @@ def test_scan_page_import_and_winbox_by_mac(app, admin, monkeypatch):
     monkeypatch.setattr(netscan, "list_cards", lambda: [card])
     seen = {}
 
-    def fake_scan(cards, seconds):
+    def fake_scan(cards, seconds, all_cards=None):
         seen["args"] = ([c.ip for c in cards], seconds)
         new = netscan.parse_mndp(mndp_packet())
         new.card = card.label
@@ -130,3 +130,39 @@ def test_scan_page_import_and_winbox_by_mac(app, admin, monkeypatch):
     info = admin.get(f"/api/launch/{token}").json()
     assert (info["host"], info["port"], info["password"]) == ("4C:5E:0C:00:00:01", None, "pw")
     assert admin.post("/launch/winbox-mac", data={"csrf_token": admin.token, "mac": "nope"}).status_code == 400
+
+
+def test_chosen_card_leaves_out_other_cards_networks(monkeypatch):
+    """An announcement from the second card's subnet must not show up when only the first card is scanned."""
+    lan = netscan.Card("LAN", "10.0.0.5", "255.255.255.0")
+    wan = netscan.Card("WAN", "127.0.0.1", "255.0.0.0")
+    port = _responder(mndp_packet())
+    found, _ = netscan.scan([lan], seconds=1, mndp_port=port, targets=["127.0.0.1"], all_cards=[lan, wan])
+    assert found == []
+    port = _responder(mndp_packet())
+    found, _ = netscan.scan([wan], seconds=1, mndp_port=port, targets=["127.0.0.1"], all_cards=[lan, wan])
+    assert [f.card for f in found] == ["WAN (127.0.0.1/8)"]
+
+
+def test_ip_calculator_shows_used_addresses(app, admin):
+    from spike_monitor.models import DeviceInterface
+    with SessionLocal() as db:
+        core = Device(name="Core", ip_address="10.0.0.1", brand="mikrotik")
+        db.add(core)
+        db.flush()
+        db.add(DeviceInterface(device_id=core.id, name="ether2", ip_addresses="10.0.0.2/24, 192.168.88.1/24"))
+        db.add(Device(name="AP", ip_address="10.0.0.3"))
+        db.commit()
+        core_id = core.id
+    page = admin.get("/tools", params={"ip": "10.0.0.2/24"}).text
+    assert "10.0.0.2 is already in use" in page and f'href="/devices/{core_id}"' in page and "interface ether2" in page
+    assert "First free address: <b>10.0.0.4</b>" in page and "3 address(es)" in page
+    page = admin.get("/tools", params={"ip": "10.0.0.9/24"}).text
+    assert "is not used by any device" in page and "10.0.0.4" in page
+    page = admin.get("/tools", params={"ip": "10.0.0.1/32"}).text
+    assert "no free address left" in page
+    # and the device form refuses the duplicate IP
+    from tests.test_changes_round1 import DEVICE_FORM
+    r = admin.post("/devices/new", data={**DEVICE_FORM, "csrf_token": admin.token, "name": "Dup",
+                                         "ip_address": "10.0.0.3"})
+    assert "Another device already uses this IP address." in r.text

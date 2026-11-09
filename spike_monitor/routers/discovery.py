@@ -165,10 +165,9 @@ def scan_page(request: Request, db: Session = Depends(get_db), user: User = Depe
 @router.post("/discovery/scan", dependencies=[Depends(verify_csrf)])
 async def run_scan(request: Request, db: Session = Depends(get_db), user: User = Depends(require_technician)):
     form = await request.form()
-    cards = netscan.list_cards()
+    all_cards = netscan.list_cards()
     chosen = str(form.get("card", ""))
-    if chosen:
-        cards = [c for c in cards if c.ip == chosen]
+    cards = [c for c in all_cards if c.ip == chosen] if chosen else all_cards
     try:
         seconds = min(max(float(form.get("seconds", 5)), 2), 30)
     except ValueError:
@@ -176,7 +175,7 @@ async def run_scan(request: Request, db: Session = Depends(get_db), user: User =
     if not cards:
         flash(request, "No usable network card found on the server.", "error")
         return RedirectResponse("/discovery/scan", status_code=303)
-    found, problems = await asyncio.to_thread(netscan.scan, cards, seconds)
+    found, problems = await asyncio.to_thread(netscan.scan, cards, seconds, all_cards=all_cards)
     request.app.state.last_scan = {
         "at": utcnow(), "cards": ", ".join(c.label for c in cards), "problems": problems,
         "results": [{"name": f.identity, "ip": f.ip, "mac": f.mac, "platform": f.platform, "board": f.board,

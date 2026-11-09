@@ -33,7 +33,8 @@ See [docs/DESIGN.md](docs/DESIGN.md) for the full requirements and the phase pla
 - Config backups (MikroTik .rsc + .backup, Ubiquiti system.cfg): daily, history, compare versions, download
 - Export / import everything in one password-protected file; device list as CSV
 - Open a device in Winbox / SSH already logged in (helper from Tools), or its web page
-- Tools: IP / subnet calculator, VLSM planner, ping and traceroute
+- Tools: IP / subnet calculator (warns when an IP is already used in the app and gives the first free one),
+  VLSM planner, ping and traceroute
 - Runs in the background at Windows startup (`scripts\install_service.bat`)
 
 ## Preparing your devices

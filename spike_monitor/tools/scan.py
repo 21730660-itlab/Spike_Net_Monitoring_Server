@@ -176,12 +176,25 @@ def _socket(ip: str, port: int) -> socket.socket:
     return s
 
 
-def scan(cards: list[Card], seconds: float = 5.0, mndp_port: int = MNDP_PORT, ubnt_port: int = UBNT_PORT,
-         targets: list[str] | None = None) -> tuple[list[Found], list[str]]:
-    """Ask on every card and collect answers for ``seconds``. Returns (devices, problems).
+def _owner(src: str, cards: list[Card]) -> Card | None:
+    """The card whose subnet holds ``src`` (the most specific one)."""
+    try:
+        ip = ipaddress.IPv4Address(src)
+    except ValueError:
+        return None
+    matches = [c for c in cards if ip in c.network]
+    return max(matches, key=lambda c: c.network.prefixlen) if matches else None
 
-    ``targets`` replaces the broadcast addresses (used by the tests).
+
+def scan(cards: list[Card], seconds: float = 5.0, mndp_port: int = MNDP_PORT, ubnt_port: int = UBNT_PORT,
+         targets: list[str] | None = None, all_cards: list[Card] | None = None) -> tuple[list[Found], list[str]]:
+    """Ask on ``cards`` and collect answers for ``seconds``. Returns (devices, problems).
+
+    Broadcasts (MikroTik announcements in particular) reach the listening sockets from every card,
+    so an answer whose address is in the subnet of a card that was not chosen (from ``all_cards``)
+    is left out. ``targets`` replaces the broadcast addresses (used by the tests).
     """
+    all_cards = all_cards or cards
     problems: list[str] = []
     socks: dict[socket.socket, tuple[str, Card | None]] = {}  # socket -> (protocol, card)
     for card in cards:
@@ -224,7 +237,12 @@ def scan(cards: list[Card], seconds: float = 5.0, mndp_port: int = MNDP_PORT, ub
                         if f is None:
                             continue
                         f.ip = f.ip or src
-                        heard = card or next((c for c in cards if ipaddress.IPv4Address(src) in c.network), None)
+                        owner = _owner(src, all_cards)
+                        if owner is not None and owner not in cards:
+                            continue  # heard from another card's network
+                        if owner is None and card is None and len(cards) < len(all_cards):
+                            continue  # broadcast from an unknown subnet: cannot tell which card heard it
+                        heard = owner or card
                         f.card = heard.label if heard else ""
                         _merge(found, f)
                 except (BlockingIOError, InterruptedError):
