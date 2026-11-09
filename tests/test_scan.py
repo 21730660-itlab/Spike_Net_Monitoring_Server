@@ -210,3 +210,11 @@ def test_scan_subnet_choice_and_clear(app, admin, monkeypatch):
     assert "Not a valid IPv4 subnet" in page
     page = admin.post("/discovery/scan/clear", data={"csrf_token": admin.token}).text
     assert "Scan results cleared." in page and "Found" not in page
+
+
+def test_banner_when_files_are_newer_than_the_server(app, admin, monkeypatch):
+    from spike_monitor import deps
+    assert "still running the old version" not in admin.get("/discovery/scan").text
+    monkeypatch.setitem(deps._started, "mtime", 0.0)
+    monkeypatch.setitem(deps._started, "checked", 0.0)
+    assert "still running the old version" in admin.get("/discovery/scan").text

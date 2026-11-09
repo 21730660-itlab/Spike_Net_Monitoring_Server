@@ -1,6 +1,7 @@
 """Shared request helpers: current user, role checks, templates and audit log."""
 from __future__ import annotations
 
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -13,7 +14,29 @@ from .db import get_db
 from .models import AuditLog, Role, Status, User
 from .security import SecretBox, csrf_token
 
-templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+PACKAGE_DIR = Path(__file__).parent
+templates = Jinja2Templates(directory=str(PACKAGE_DIR / "templates"))
+
+
+def _code_mtime() -> float:
+    return max((p.stat().st_mtime for p in PACKAGE_DIR.rglob("*.py")), default=0.0)
+
+
+# Pages (templates) are read from disk every time, but the Python code only when the server starts.
+# After an update without a restart, new buttons would call routes the old server does not have (404).
+_started = {"mtime": _code_mtime(), "checked": 0.0, "stale": False}
+
+
+def code_updated() -> bool:
+    """True when the program files on disk are newer than the running server (checked every 30 s)."""
+    now = time.monotonic()
+    if now - _started["checked"] > 30:
+        _started["checked"] = now
+        try:
+            _started["stale"] = _code_mtime() > _started["mtime"] + 1
+        except OSError:
+            pass
+    return _started["stale"]
 
 
 def local_time(value: datetime | None) -> str:
@@ -34,6 +57,7 @@ templates.env.filters["bps"] = format_bps
 templates.env.globals["csrf_token"] = csrf_token
 templates.env.globals["Role"] = Role
 templates.env.globals["Status"] = Status
+templates.env.globals["code_updated"] = code_updated
 
 
 class LoginRequired(Exception):
