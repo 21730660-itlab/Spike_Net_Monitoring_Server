@@ -175,13 +175,35 @@ async def run_scan(request: Request, db: Session = Depends(get_db), user: User =
     if not cards:
         flash(request, "No usable network card found on the server.", "error")
         return RedirectResponse("/discovery/scan", status_code=303)
-    found, problems = await asyncio.to_thread(netscan.scan, cards, seconds, all_cards=all_cards)
+    scope = str(form.get("scope", "card"))
+    try:
+        if scope == "all":
+            subnets = None
+        elif scope == "custom":
+            subnets = netscan.parse_subnets(str(form.get("subnets", "")))
+            if not subnets:
+                raise ValueError("Type the subnet to scan, e.g. 10.0.5.0/24.")
+        else:
+            subnets = list(dict.fromkeys(c.network for c in cards))
+    except ValueError as exc:
+        flash(request, str(exc), "error")
+        return RedirectResponse("/discovery/scan", status_code=303)
+    found, problems = await asyncio.to_thread(netscan.scan, cards, seconds, all_cards=all_cards, subnets=subnets)
     request.app.state.last_scan = {
         "at": utcnow(), "cards": ", ".join(c.label for c in cards), "problems": problems,
+        "subnets": ", ".join(str(n) for n in subnets) if subnets is not None else "all subnets",
+        "form": {"card": chosen, "seconds": int(seconds), "scope": scope, "subnets": str(form.get("subnets", ""))},
         "results": [{"name": f.identity, "ip": f.ip, "mac": f.mac, "platform": f.platform, "board": f.board,
                      "version": f.version, "uptime": f.uptime, "interface": f.interface, "card": f.card,
                      "protocols": ", ".join(f.protocols)} for f in found],
     }
     audit(db, request, user.username, "discovery.scan", chosen or "all cards", f"found={len(found)}")
     db.commit()
+    return RedirectResponse("/discovery/scan", status_code=303)
+
+
+@router.post("/discovery/scan/clear", dependencies=[Depends(verify_csrf)])
+def clear_scan(request: Request, user: User = Depends(require_technician)):
+    request.app.state.last_scan = None
+    flash(request, "Scan results cleared.")
     return RedirectResponse("/discovery/scan", status_code=303)

@@ -186,13 +186,35 @@ def _owner(src: str, cards: list[Card]) -> Card | None:
     return max(matches, key=lambda c: c.network.prefixlen) if matches else None
 
 
+def _in(address: str, subnets: list[ipaddress.IPv4Network]) -> bool:
+    try:
+        ip = ipaddress.IPv4Address(address)
+    except ValueError:
+        return False
+    return not ip.is_unspecified and any(ip in n for n in subnets)
+
+
+def parse_subnets(text: str) -> list[ipaddress.IPv4Network]:
+    """'10.0.5.0/24, 192.168.88.0/24' (or one IP with its mask, e.g. 10.0.5.7/24)."""
+    nets = []
+    for part in text.replace(";", ",").replace(" ", ",").split(","):
+        if part.strip():
+            try:
+                nets.append(ipaddress.IPv4Network(part.strip(), strict=False))
+            except ValueError as exc:
+                raise ValueError(f"Not a valid IPv4 subnet: {part.strip()} (example: 10.0.5.0/24)") from exc
+    return nets
+
+
 def scan(cards: list[Card], seconds: float = 5.0, mndp_port: int = MNDP_PORT, ubnt_port: int = UBNT_PORT,
-         targets: list[str] | None = None, all_cards: list[Card] | None = None) -> tuple[list[Found], list[str]]:
+         targets: list[str] | None = None, all_cards: list[Card] | None = None,
+         subnets: list[ipaddress.IPv4Network] | None = None) -> tuple[list[Found], list[str]]:
     """Ask on ``cards`` and collect answers for ``seconds``. Returns (devices, problems).
 
-    Broadcasts (MikroTik announcements in particular) reach the listening sockets from every card,
-    so an answer whose address is in the subnet of a card that was not chosen (from ``all_cards``)
-    is left out. ``targets`` replaces the broadcast addresses (used by the tests).
+    On a Layer 2 network one card hears devices of every subnet on the wire. With ``subnets``, only
+    devices with an address in one of them are kept. Without it, an answer whose address is in the
+    subnet of a card that was not chosen (from ``all_cards``) is left out, because broadcasts reach
+    the listening sockets from every card. ``targets`` replaces the broadcast addresses (tests).
     """
     all_cards = all_cards or cards
     problems: list[str] = []
@@ -238,7 +260,12 @@ def scan(cards: list[Card], seconds: float = 5.0, mndp_port: int = MNDP_PORT, ub
                             continue
                         f.ip = f.ip or src
                         owner = _owner(src, all_cards)
-                        if owner is not None and owner not in cards:
+                        if subnets is not None:
+                            if not any(_in(a, subnets) for a in (f.ip, src)):
+                                continue  # outside the chosen subnet(s)
+                            if f.ip not in ("", "0.0.0.0") and not _in(f.ip, subnets):
+                                f.ip = src  # show the address that matched
+                        elif owner is not None and owner not in cards:
                             continue  # heard from another card's network
                         if owner is None and card is None and len(cards) < len(all_cards):
                             continue  # broadcast from an unknown subnet: cannot tell which card heard it

@@ -89,8 +89,9 @@ def test_scan_page_import_and_winbox_by_mac(app, admin, monkeypatch):
     monkeypatch.setattr(netscan, "list_cards", lambda: [card])
     seen = {}
 
-    def fake_scan(cards, seconds, all_cards=None):
+    def fake_scan(cards, seconds, all_cards=None, subnets=None):
         seen["args"] = ([c.ip for c in cards], seconds)
+        seen["subnets"] = subnets
         new = netscan.parse_mndp(mndp_packet())
         new.card = card.label
         old = netscan.Found(mac="4C:5E:0C:00:00:01", ip="10.0.0.1", identity="Core", protocols=["MNDP"])
@@ -101,6 +102,7 @@ def test_scan_page_import_and_winbox_by_mac(app, admin, monkeypatch):
     assert "Ethernet (10.0.0.5/24)" in page and "Found" not in page
     r = admin.post("/discovery/scan", data={"csrf_token": admin.token, "card": "10.0.0.5", "seconds": "99"})
     assert r.status_code == 200 and seen["args"] == (["10.0.0.5"], 30)
+    assert [str(n) for n in seen["subnets"]] == ["10.0.0.0/24"]  # default: the card's own subnet
     page = r.text
     assert "Found 2 device(s)" in page and "Tower-2 AP" in page and "example problem" in page
     assert f'href="/devices/{known_id}"' in page  # already in the app: linked, not offered for import
@@ -166,3 +168,45 @@ def test_ip_calculator_shows_used_addresses(app, admin):
     r = admin.post("/devices/new", data={**DEVICE_FORM, "csrf_token": admin.token, "name": "Dup",
                                          "ip_address": "10.0.0.3"})
     assert "Another device already uses this IP address." in r.text
+
+
+def test_subnet_filter():
+    """One card on a Layer 2 network hears every subnet: only the chosen subnet is kept."""
+    card = netscan.Card("LAN", "127.0.0.1", "255.0.0.0")
+    port = _responder(mndp_packet(ip=b"\x0a\x00\x05\x02"))  # reports 10.0.5.2
+    found, _ = netscan.scan([card], seconds=1, mndp_port=port, targets=["127.0.0.1"],
+                            subnets=netscan.parse_subnets("192.168.88.0/24"))
+    assert found == []
+    port = _responder(mndp_packet(ip=b"\x0a\x00\x05\x02"))
+    found, _ = netscan.scan([card], seconds=1, mndp_port=port, targets=["127.0.0.1"],
+                            subnets=netscan.parse_subnets("192.168.88.0/24, 10.0.5.7/24"))
+    assert [f.ip for f in found] == ["10.0.5.2"]
+    port = _responder(mndp_packet(ip=b""))  # no IP in the answer: the sender's address counts
+    found, _ = netscan.scan([card], seconds=1, mndp_port=port, targets=["127.0.0.1"],
+                            subnets=netscan.parse_subnets("127.0.0.0/8"))
+    assert [f.ip for f in found] == ["127.0.0.1"]
+    import pytest
+    with pytest.raises(ValueError):
+        netscan.parse_subnets("10.0.5.0/24, nonsense")
+
+
+def test_scan_subnet_choice_and_clear(app, admin, monkeypatch):
+    card = netscan.Card("Ethernet", "10.0.0.5", "255.255.255.0")
+    monkeypatch.setattr(netscan, "list_cards", lambda: [card])
+    seen = {}
+
+    def fake_scan(cards, seconds, all_cards=None, subnets=None):
+        seen["subnets"] = subnets
+        return [netscan.Found(mac="4C:5E:0C:11:22:33", ip="10.0.5.2", identity="AP", protocols=["MNDP"])], []
+    monkeypatch.setattr(netscan, "scan", fake_scan)
+    page = admin.post("/discovery/scan", data={"csrf_token": admin.token, "card": "", "scope": "custom",
+                                               "subnets": "10.0.5.0/24 192.168.88.0/24"}).text
+    assert [str(n) for n in seen["subnets"]] == ["10.0.5.0/24", "192.168.88.0/24"]
+    assert "10.0.5.0/24, 192.168.88.0/24" in page and "Clear results" in page
+    assert 'value="custom" selected' in page  # the choice is remembered
+    admin.post("/discovery/scan", data={"csrf_token": admin.token, "scope": "all"})
+    assert seen["subnets"] is None
+    page = admin.post("/discovery/scan", data={"csrf_token": admin.token, "scope": "custom", "subnets": "bad"}).text
+    assert "Not a valid IPv4 subnet" in page
+    page = admin.post("/discovery/scan/clear", data={"csrf_token": admin.token}).text
+    assert "Scan results cleared." in page and "Found" not in page

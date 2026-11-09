@@ -7,23 +7,36 @@
     Only devices on the same Layer 2 network as the card are seen (not behind a router).</p>
   <form method="post" action="/discovery/scan" class="actions" style="align-items:flex-end;flex-wrap:wrap" data-scan-form>
     <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
-    <label>Network card<br><select name="card" style="min-width:260px">
+    {% set f = last.form if last and last.form else {} %}
+    <label>Network card<br><select name="card" style="min-width:260px" data-scan-card>
       <option value="">All network cards</option>
-      {% for c in cards %}<option value="{{ c.ip }}">{{ c.label }}</option>{% endfor %}
+      {% for c in cards %}<option value="{{ c.ip }}" data-subnet="{{ c.network }}" {{ 'selected' if f.card == c.ip }}>{{ c.label }}</option>{% endfor %}
     </select></label>
+    <label>Show devices in<br><select name="scope" style="width:auto" data-scan-scope>
+      <option value="card" {{ 'selected' if f.scope in (None, '', 'card') }}>The card's subnet only</option>
+      <option value="custom" {{ 'selected' if f.scope == 'custom' }}>This subnet…</option>
+      <option value="all" {{ 'selected' if f.scope == 'all' }}>All subnets seen on the card</option>
+    </select></label>
+    <label data-scan-custom>Subnet(s)<br><input type="text" name="subnets" value="{{ f.subnets or '' }}" placeholder="10.0.5.0/24, 192.168.88.0/24" style="width:240px"></label>
     <label>Listen for<br><select name="seconds" style="width:auto">
-      {% for s in (5, 10, 20, 30) %}<option value="{{ s }}">{{ s }} seconds</option>{% endfor %}
+      {% for s in (5, 10, 20, 30) %}<option value="{{ s }}" {{ 'selected' if f.seconds == s }}>{{ s }} seconds</option>{% endfor %}
     </select></label>
     <button class="btn primary" data-scan-btn>🔍 Scan</button>
   </form>
   {% if not cards %}<p class="error-text">No network card with an IPv4 address was found on the server.</p>{% endif %}
+  <p class="muted" style="margin-top:8px"><b>The card's subnet only</b> (for example 192.168.88.0/24) hides the devices of other subnets
+    that the same cable carries. Use <b>This subnet…</b> to see another subnet (several: separate with commas), or <b>All subnets</b> to see everything, like Winbox.</p>
   <p class="muted" style="margin-top:8px">Some devices answer only to their once-a-minute announcement; if one is missing, scan for 30 seconds or more.
     Nothing found at all? Run <code>scripts\open_firewall.bat</code> as administrator on the server once (it allows UDP 5678 and 10001).</p>
 </div>
 
 {% if last %}
 <div class="panel">
-  <h3>Found {{ rows|length }} device(s) <span class="muted" style="font-weight:normal">· {{ last.at|dt }} · {{ last.cards }}</span></h3>
+  <form class="inline" method="post" action="/discovery/scan/clear" style="float:right" data-countdown="Clear the scan results?">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+    <button class="btn small danger">🗑 Clear results</button>
+  </form>
+  <h3>Found {{ rows|length }} device(s) <span class="muted" style="font-weight:normal">· {{ last.at|dt }} · {{ last.cards }} · {{ last.subnets }}</span></h3>
   {% for p in last.problems %}<div class="flash error">{{ p }}</div>{% endfor %}
   {% if rows %}
   <div class="table-wrap"><table>
@@ -58,6 +71,13 @@
 {% endif %}
 {% endblock %}
 {% block scripts %}<script>
+(() => {
+  const scope = document.querySelector("[data-scan-scope]");
+  const custom = document.querySelector("[data-scan-custom]");
+  const show = () => { custom.style.display = scope.value === "custom" ? "" : "none"; };
+  scope.addEventListener("change", show);
+  show();
+})();
 document.querySelector("[data-scan-form]").addEventListener("submit", () => {
   const b = document.querySelector("[data-scan-btn]"); b.disabled = true; b.textContent = "Scanning…";
 });

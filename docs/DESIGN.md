@@ -120,6 +120,8 @@ Windows PC 24/7; the team uses it from a browser on any PC or phone.
   of the server PC's network cards and listens 5-30 s (also catches the once-a-minute MNDP announcements).
   Shows identity, IP, MAC, model, version, uptime, the device's port and the card that heard it, and
   whether it is already in the app. New ones can be imported as devices or customers into a chosen site.
+- Subnet filter: by default only devices in the chosen card's own subnet are shown (one card on a Layer 2
+  network hears every subnet on the wire); or a typed list of subnets; or all subnets. Clear results button.
 - Winbox by MAC address: from the scan results and on MikroTik device pages (helper on the technician PC,
   which must be on the same Layer 2 network). Uses the device's login when it is in the app.
 - Firewall: open_firewall.bat and install_service allow inbound UDP 5678 and 10001.
