@@ -38,7 +38,7 @@
     </nav>
   </aside>
   <main class="main">
-    {% if user and user.role in (Role.ADMIN, Role.TECHNICIAN) and code_updated() %}
+    {% if user and user.role in (Role.ADMIN, Role.TECHNICIAN) and code_updated is defined and code_updated() %}
     <div class="flash error" style="margin-bottom:14px">⚠️ <b>The program files were updated, but the server is still running the old version.</b>
       New buttons give "404 Not found" until it restarts. Close <code>run.bat</code> and start it again, or run
       <code>scripts\restart_service.bat</code> as administrator if it runs in the background.</div>
